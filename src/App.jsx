@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { presetDecks } from "./data/presetDecks"
 
 function getDue(cards) {
   const now = new Date();
@@ -72,16 +73,42 @@ const [dark, setDark] = useState(() => {
   useEffect(() => localStorage.setItem("darkmode", dark), [dark]);
 
   const [decks, setDecks] = useState(() => {
-    const saved = localStorage.getItem("decks");
-    return saved ? JSON.parse(saved) : [];
-  });
+  const saved = localStorage.getItem("decks");
+  return saved ? JSON.parse(saved) : [];
+});
+
+const allDecks = [...presetDecks, ...decks];
 
   useEffect(() => {
     localStorage.setItem("decks", JSON.stringify(decks));
   }, [decks]);
 
   const [activeDeckId, setActiveDeckId] = useState(null);
-  const activeDeck = decks.find(d => d.id === activeDeckId);
+  const activeDeck = allDecks.find(d => String(d.id) === String(activeDeckId));
+
+// 📥 Recupera sessão parcial (se for do mesmo dia)
+useEffect(() => {
+  const saved = localStorage.getItem("partialSession");
+
+  if (!saved) return;
+
+  try {
+    const parsed = JSON.parse(saved);
+
+    // só retoma se for no mesmo dia e no mesmo deck
+    if (parsed.startDate === getDateKey() && parsed.deckId === activeDeckId) {
+      setSession(parsed.session || []);
+      setIndex(parsed.index || 0);
+      setShowBack(parsed.showBack || false);
+      setStudyStarted(true);
+    } else {
+      localStorage.removeItem("partialSession");
+    }
+  } catch {
+    console.error("Erro ao carregar sessão parcial");
+    localStorage.removeItem("partialSession");
+  }
+}, [activeDeckId]);
 
   const [newDeck, setNewDeck] = useState("");
 
@@ -92,10 +119,10 @@ const [dark, setDark] = useState(() => {
   }
 
   function updateCards(cards) {
-    setDecks(decks.map(d =>
-      d.id === activeDeckId ? { ...d, cards } : d
-    ));
-  }
+  setDecks(decks.map(d =>
+    String(d.id) === String(activeDeckId) ? { ...d, cards } : d
+  ));
+}
 
   const [front, setFront] = useState("");
   const [back, setBack] = useState("");
@@ -122,6 +149,12 @@ const [dark, setDark] = useState(() => {
     setFront("");
     setBack("");
   }
+
+  function autoResize(e) {
+  const el = e.target;
+  el.style.height = "auto";
+  el.style.height = el.scrollHeight + "px";
+}
 
   function calculateSM2(card, quality) {
     let { repetition, interval, ease } = card;
@@ -162,12 +195,16 @@ const [dark, setDark] = useState(() => {
   }
 
   const [session, setSession] = useState([]);
-  const [index, setIndex] = useState(0);
-  const [showBack, setShowBack] = useState(false);
-  const [startTime, setStartTime] = useState(null);
-  const [todayCount, setTodayCount] = useState(0);
-  const [tab, setTab] = useState("today"); // today | decks | add | stats
- function startSession() {
+const [index, setIndex] = useState(0);
+const [showBack, setShowBack] = useState(false);
+const [studyStarted, setStudyStarted] = useState(false);
+const [startTime, setStartTime] = useState(null);
+const [todayCount, setTodayCount] = useState(0);
+const [tab, setTab] = useState("today"); // today | decks | add | stats
+
+function startSession() {
+  if (!activeDeck) return;
+
   const due = getDue(activeDeck.cards);
   if (due.length === 0) return;
 
@@ -175,12 +212,53 @@ const [dark, setDark] = useState(() => {
   setIndex(0);
   setShowBack(false);
   setStartTime(Date.now());
+  setStudyStarted(true);
 
   // ✅ vai direto para a aba Study
   setTab("study");
 }
 
-  function nextCard(newIndex) {
+function pauseSession() {
+  if (studyStarted && session.length > 0) {
+    const sessionData = {
+      deckId: activeDeckId,
+      session,
+      index,
+      showBack,
+      startDate: getDateKey()
+    };
+
+    localStorage.setItem("partialSession", JSON.stringify(sessionData));
+
+    setSession([]);
+    setIndex(0);
+    setShowBack(false);
+    setStartTime(null);
+    setTab("today");
+    setStudyStarted(false);
+  }
+
+
+  setSession([]);
+  setIndex(0);
+  setShowBack(false);
+  setStartTime(null);
+  setTab("today");
+  setStudyStarted(false);
+}
+
+function endSession() {
+  localStorage.removeItem("partialSession");
+
+  setSession([]);
+  setIndex(0);
+  setShowBack(false);
+  setStartTime(null);
+  setTab("today");
+  setStudyStarted(false);
+}
+
+function nextCard(newIndex) {
   setIndex(newIndex);
   setShowBack(false);
   setStartTime(Date.now());
@@ -207,22 +285,22 @@ function updateStreak() {
   }
 
   // Se já contou hoje, não altera
-  if (lastStudyDate === todayKey) {
-    setStreak(currentStreak);
-    return;
-  }
-
-  // Continua sequência
-  if (lastStudyDate === yesterdayKey) {
-    currentStreak += 1;
-  } else {
-    // Nova sequência
-    currentStreak = 1;
-  }
-
-  const newData = { lastStudyDate: todayKey, streak: currentStreak };
-  localStorage.setItem("streakData", JSON.stringify(newData));
+if (lastStudyDate === todayKey) {
   setStreak(currentStreak);
+  return;
+}
+
+// Continua sequência
+if (lastStudyDate === yesterdayKey) {
+  currentStreak += 1;
+} else {
+  // Nova sequência
+  currentStreak = 1;
+}
+
+const newData = { lastStudyDate: todayKey, streak: currentStreak };
+localStorage.setItem("streakData", JSON.stringify(newData));
+setStreak(currentStreak);
 }
 
 function rate(quality) {
@@ -263,27 +341,29 @@ function rate(quality) {
     nextCard(index + 1);
   } else {
     setSession([]);
+    setStudyStarted(false);
+    localStorage.removeItem("partialSession");
   }
 }
 
-  const cards = activeDeck?.cards || [];
-  const dueCount = getDue(cards).length;
-  const newCardsCount = cards.filter(c => c.repetition === 0).length;
-  const progressPercent = Math.min((todayCount / DAILY_GOAL) * 100, 100);
+const cards = activeDeck?.cards || [];
+const dueCount = getDue(cards).length;
+const newCardsCount = cards.filter(c => c.repetition === 0).length;
+const progressPercent = Math.min((todayCount / DAILY_GOAL) * 100, 100);
 
-  const averageStability =
-    cards.length > 0
-      ? cards.reduce((sum, c) => sum + (c.stability || 1), 0) / cards.length
-      : 0;
+const averageStability =
+  cards.length > 0
+    ? cards.reduce((sum, c) => sum + (c.stability || 1), 0) / cards.length
+    : 0;
 
-  const averageRetention =
-    cards.length > 0
-      ? cards.reduce((sum, c) => sum + calculateRetention(c), 0) / cards.length
-      : 0;
+const averageRetention =
+  cards.length > 0
+    ? cards.reduce((sum, c) => sum + calculateRetention(c), 0) / cards.length
+    : 0;
 
-  const allReviews = cards.flatMap(c => c.reviewHistory || []);
+const allReviews = cards.flatMap(c => c.reviewHistory || []);
 
-  const averageResponseTime =
+const averageResponseTime =
   allReviews.length > 0
     ? allReviews.reduce((sum, r) => sum + r.responseTime, 0) /
       allReviews.length /
@@ -378,6 +458,24 @@ function getWeeklyData() {
     padding: 18,
     marginBottom: 16
   };
+
+  const formContainer = {
+  maxWidth: 500,
+  margin: "0 auto"
+};
+
+  const flipSound = new Audio();
+flipSound.src = "/flip.mp3";
+
+  const inputStyle = {
+  width: 360,
+  padding: 12,
+  marginBottom: 10,
+  borderRadius: 10,
+  border: "1px solid #ccc",
+  fontSize: 14,
+  outline: "none"
+};; 
 
   const button = {
     padding: 14,
@@ -566,13 +664,13 @@ const headerProgressFill = {
       {/* ABA: DECKS */}
       {tab === "decks" && (
         <>
-          <div style={box}>
+          <div style={{ ...box, ...formContainer }}>
             <h3>Criar Deck</h3>
             <input
               value={newDeck}
               onChange={e => setNewDeck(e.target.value)}
               placeholder="Nome do novo deck"
-              style={{ width: "100%", padding: 10, marginBottom: 8 }}
+              style={inputStyle}
             />
             <button
               onClick={createDeck}
@@ -586,11 +684,11 @@ const headerProgressFill = {
             <h3>Decks</h3>
             <select
               value={activeDeckId || ""}
-              onChange={e => setActiveDeckId(Number(e.target.value))}
+              onChange={e => setActiveDeckId(e.target.value || null)}
               style={{ width: "100%", padding: 10 }}
             >
               <option value="">Select Deck</option>
-              {decks.map(d => (
+              {allDecks.map(d => (
                 <option key={d.id} value={d.id}>
                   {d.name}
                 </option>
@@ -618,19 +716,19 @@ const headerProgressFill = {
 
       {/* ABA: ADICIONAR */}
       {activeDeck && tab === "add" && (
-        <div style={box}>
+        <div style={{ ...box, ...formContainer }}>
           <h3>➕ Adicionar Carta</h3>
-          <input
-            value={front}
-            onChange={e => setFront(e.target.value)}
-            placeholder="Pergunta"
-            style={{ width: "100%", padding: 10, marginBottom: 8 }}
+          <textarea
+          value={front}
+          onChange={e => setFront(e.target.value)}
+          placeholder="Pergunta"
+          style={{ ...inputStyle, minHeight: 80, resize: "none" }}
           />
-          <input
-            value={back}
-            onChange={e => setBack(e.target.value)}
-            placeholder="Resposta"
-            style={{ width: "100%", padding: 10 }}
+          <textarea
+          value={back}
+          onChange={e => setBack(e.target.value)}
+          placeholder="Resposta"
+          style={{ ...inputStyle, minHeight: 80, resize: "none" }}
           />
           <button
             onClick={addCard}
@@ -784,6 +882,34 @@ const headerProgressFill = {
   <div style={box}>
     <h3>Study</h3>
 
+{studyStarted && session.length > 0 && (
+  <>
+    <button
+      onClick={pauseSession}
+      style={{
+        ...button,
+        background: "#FF9800",
+        color: "#fff",
+        marginBottom: 12
+      }}
+    >
+      Pausar sessão
+    </button>
+
+    <button
+      onClick={endSession}
+      style={{
+        ...button,
+        background: "#f44336",
+        color: "#fff",
+        marginBottom: 12
+      }}
+    >
+      Encerrar sessão
+    </button>
+  </>
+)}
+
     {session.length > 0 && (
       <>
         <p>
@@ -797,7 +923,11 @@ const headerProgressFill = {
   }}
 >
   <div
-    onClick={() => setShowBack(!showBack)}
+    onClick={() => {
+  flipSound.currentTime = 0;
+  flipSound.play();
+  setShowBack(!showBack);
+}}
     style={{
       position: "relative",
       width: "100%",
