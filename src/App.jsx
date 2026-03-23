@@ -73,11 +73,35 @@ const [dark, setDark] = useState(() => {
   useEffect(() => localStorage.setItem("darkmode", dark), [dark]);
 
   const [decks, setDecks] = useState(() => {
-  const saved = localStorage.getItem("decks");
-  return saved ? JSON.parse(saved) : [];
+  try {
+    const saved = localStorage.getItem("decks");
+    if (!saved) return [];
+
+    const parsed = JSON.parse(saved);
+
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed.filter(
+      deck =>
+        deck &&
+        deck.id &&
+        typeof deck.name === "string" &&
+        deck.name.trim() !== "" &&
+        Array.isArray(deck.cards)
+    );
+  } catch {
+    return [];
+  }
 });
 
-const allDecks = [...presetDecks, ...decks];
+const allDecks = [...presetDecks, ...decks].filter(
+  (deck, index, arr) =>
+    deck &&
+    deck.id &&
+    typeof deck.name === "string" &&
+    deck.name.trim() !== "" &&
+    arr.findIndex(d => String(d.id) === String(deck.id)) === index
+);
 
   useEffect(() => {
     localStorage.setItem("decks", JSON.stringify(decks));
@@ -113,10 +137,30 @@ useEffect(() => {
   const [newDeck, setNewDeck] = useState("");
 
   function createDeck() {
-    if (!newDeck) return;
-    setDecks([...decks, { id: Date.now(), name: newDeck, cards: [] }]);
-    setNewDeck("");
+  const cleanName = newDeck.trim();
+
+  if (!cleanName) return;
+
+  const deckExists = [...presetDecks, ...decks].some(
+    d => d.name?.trim().toLowerCase() === cleanName.toLowerCase()
+  );
+
+  if (deckExists) {
+    alert("Já existe um deck com esse nome.");
+    return;
   }
+
+  setDecks([
+    ...decks,
+    {
+      id: Date.now().toString(),
+      name: cleanName,
+      cards: []
+    }
+  ]);
+
+  setNewDeck("");
+}
 
   function updateCards(cards) {
   setDecks(decks.map(d =>
