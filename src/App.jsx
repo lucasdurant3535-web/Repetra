@@ -1,5 +1,16 @@
 import React, { useState, useEffect } from "react";
 import { presetDecks } from "./data/presetDecks"
+import { auth, db } from "./firebase";
+import { collection, doc, setDoc, getDocs, updateDoc } from "firebase/firestore";
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  onAuthStateChanged,
+  signOut
+} from "firebase/auth";
+
+console.log("Auth:", auth);
+console.log("Firestore:", db);
 
 function getDue(cards) {
   const now = new Date();
@@ -72,27 +83,7 @@ const [dark, setDark] = useState(() => {
 });
   useEffect(() => localStorage.setItem("darkmode", dark), [dark]);
 
-  const [decks, setDecks] = useState(() => {
-  try {
-    const saved = localStorage.getItem("decks");
-    if (!saved) return [];
-
-    const parsed = JSON.parse(saved);
-
-    if (!Array.isArray(parsed)) return [];
-
-    return parsed.filter(
-      deck =>
-        deck &&
-        deck.id &&
-        typeof deck.name === "string" &&
-        deck.name.trim() !== "" &&
-        Array.isArray(deck.cards)
-    );
-  } catch {
-    return [];
-  }
-});
+  const [decks, setDecks] = useState([]);
 
 const allDecks = [...presetDecks, ...decks].filter(
   (deck, index, arr) =>
@@ -104,11 +95,53 @@ const allDecks = [...presetDecks, ...decks].filter(
 );
 
   useEffect(() => {
-    localStorage.setItem("decks", JSON.stringify(decks));
-  }, [decks]);
+  localStorage.removeItem("decks");
+}, []);
 
   const [activeDeckId, setActiveDeckId] = useState(null);
   const activeDeck = allDecks.find(d => String(d.id) === String(activeDeckId));
+
+  const isPresetDeck = presetDecks.some(
+  d => String(d.id) === String(activeDeckId)
+);
+
+  const [email, setEmail] = useState("");
+const [password, setPassword] = useState("");
+const [user, setUser] = useState(null);
+
+  useEffect(() => {
+  const unsubscribe = onAuthStateChanged(auth, currentUser => {
+    setUser(currentUser);
+  });
+
+  return () => unsubscribe();
+}, []);
+
+useEffect(() => {
+  async function loadUserDecks() {
+    if (!user) {
+      setDecks([]);
+      return;
+    }
+
+    try {
+      const snapshot = await getDocs(
+        collection(db, "users", user.uid, "decks")
+      );
+
+      const loadedDecks = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+
+      setDecks(loadedDecks);
+    } catch (error) {
+      console.error("Erro ao carregar decks:", error);
+    }
+  }
+
+  loadUserDecks();
+}, [user]);
 
 // 📥 Recupera sessão parcial (se for do mesmo dia)
 useEffect(() => {
@@ -136,10 +169,15 @@ useEffect(() => {
 
   const [newDeck, setNewDeck] = useState("");
 
-  function createDeck() {
+  async function createDeck() {
   const cleanName = newDeck.trim();
 
   if (!cleanName) return;
+
+  if (!user) {
+    alert("Você precisa estar logado para criar um deck.");
+    return;
+  }
 
   const deckExists = [...presetDecks, ...decks].some(
     d => d.name?.trim().toLowerCase() === cleanName.toLowerCase()
@@ -150,49 +188,126 @@ useEffect(() => {
     return;
   }
 
-  setDecks([
-    ...decks,
-    {
-      id: Date.now().toString(),
-      name: cleanName,
-      cards: []
-    }
-  ]);
+  try {
+    const deckId = Date.now().toString();
 
-  setNewDeck("");
+    const deckData = {
+      id: deckId,
+      name: cleanName,
+      cards: [],
+      userId: user.uid,
+      createdAt: new Date().toISOString()
+    };
+
+    await setDoc(
+      doc(db, "users", user.uid, "decks", deckId),
+      deckData
+    );
+
+    setDecks([
+      ...decks,
+      deckData
+    ]);
+
+    setNewDeck("");
+    alert("Deck criado com sucesso!");
+  } catch (error) {
+    console.error("Erro ao criar deck:", error);
+    alert("Erro ao salvar deck no Firestore.");
+  }
 }
 
-  function updateCards(cards) {
-  setDecks(decks.map(d =>
-    String(d.id) === String(activeDeckId) ? { ...d, cards } : d
-  ));
+
+async function handleRegister() {
+  if (!email || !password) return;
+
+  try {
+    await createUserWithEmailAndPassword(auth, email, password);
+    alert("Conta criada com sucesso!");
+    setEmail("");
+    setPassword("");
+  } catch (error) {
+    alert(error.message);
+  }
+}
+
+async function handleLogin() {
+  if (!email || !password) return;
+
+  try {
+    await signInWithEmailAndPassword(auth, email, password);
+    alert("Login realizado com sucesso!");
+    setEmail("");
+    setPassword("");
+  } catch (error) {
+    alert(error.message);
+  }
+}
+
+async function handleLogout() {
+  try {
+    await signOut(auth);
+  } catch (error) {
+    alert(error.message);
+  }
+}
+
+  async function updateCards(cards) {
+  if (!activeDeckId) return;
+
+  if (isPresetDeck) {
+    alert("Este é um deck padrão. Para salvar progresso, primeiro crie uma cópia dele na sua conta.");
+    return;
+  }
+
+  if (!user) return;
+
+  try {
+    await updateDoc(
+      doc(db, "users", user.uid, "decks", String(activeDeckId)),
+      {
+        cards,
+        updatedAt: new Date().toISOString()
+      }
+    );
+
+    setDecks(prev =>
+      prev.map(d =>
+        String(d.id) === String(activeDeckId) ? { ...d, cards } : d
+      )
+    );
+  } catch (error) {
+    console.error("Erro ao atualizar cartas:", error);
+    alert("Erro ao salvar cartas no Firestore.");
+  }
 }
 
   const [front, setFront] = useState("");
   const [back, setBack] = useState("");
 
-  function addCard() {
-    if (!front || !back || !activeDeck) return;
+  async function addCard() {
+  if (!front || !back || !activeDeck) return;
 
-    const now = new Date().toISOString();
+  const now = new Date().toISOString();
 
-    const newCard = {
-      id: Date.now(),
-      question: front,
-      answer: back,
-      repetition: 0,
-      interval: 0,
-      ease: 2.5,
-      nextReview: now,
-      lastReview: now,
-      reviewHistory: [],
-      stability: 1
-    };
+  const newCard = {
+    id: Date.now(),
+    question: front,
+    answer: back,
+    repetition: 0,
+    interval: 0,
+    ease: 2.5,
+    nextReview: now,
+    lastReview: now,
+    reviewHistory: [],
+    stability: 1
+  };
 
-    updateCards([...activeDeck.cards, newCard]);
-    setFront("");
-    setBack("");
-  }
+  await updateCards([...activeDeck.cards, newCard]);
+
+  setFront("");
+  setBack("");
+}
 
   function autoResize(e) {
   const el = e.target;
@@ -245,6 +360,7 @@ const [studyStarted, setStudyStarted] = useState(false);
 const [startTime, setStartTime] = useState(null);
 const [todayCount, setTodayCount] = useState(0);
 const [tab, setTab] = useState("today"); // today | decks | add | stats
+
 
 function startSession() {
   if (!activeDeck) return;
@@ -606,6 +722,255 @@ const headerProgressFill = {
   transition: "0.4s",
   borderRadius: 10
 };
+
+if (!user) {
+  return (
+    <div
+      style={{
+        minHeight: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: dark ? "#121212" : "#f5f5f5",
+        padding: 20
+      }}
+    >
+      <div
+        style={{
+          width: "100%",
+          maxWidth: 380,
+          padding: 28,
+          borderRadius: 24,
+          background: dark ? "#1e1e1e" : "#ffffff",
+          boxShadow: dark
+            ? "0 20px 50px rgba(0,0,0,0.35)"
+            : "0 20px 50px rgba(0,0,0,0.12)",
+          textAlign: "center"
+        }}
+      >
+        <div style={{ fontSize: 46, marginBottom: 10 }}>🧠</div>
+
+        <h1 style={{ margin: 0, fontSize: 28, fontWeight: 900 }}>
+          Don't Forget It
+        </h1>
+
+        <p style={{ fontSize: 14, opacity: 0.75, marginTop: 10, marginBottom: 24 }}>
+          O sistema de memória que se adapta ao seu cérebro em tempo real.
+        </p>
+
+        <input
+          value={email}
+          onChange={e => setEmail(e.target.value)}
+          placeholder="Email"
+          style={inputStyle}
+        />
+
+        <input
+          type="password"
+          value={password}
+          onChange={e => setPassword(e.target.value)}
+          placeholder="Senha"
+          style={inputStyle}
+        />
+
+        <button
+          onClick={handleLogin}
+          style={{ ...button, background: "#2196F3", color: "#fff", width: "100%", marginTop: 8 }}
+        >
+          Entrar
+        </button>
+
+        <button
+          onClick={handleRegister}
+          style={{ ...button, background: "#4CAF50", color: "#fff", width: "100%", marginTop: 10 }}
+        >
+          Criar conta
+        </button>
+      </div>
+    </div>
+  );
+}
+
+if (studyStarted && activeDeck && session.length > 0) {
+  return (
+    <div
+      style={{
+        minHeight: "100vh",
+        background: dark ? "#121212" : "#f5f5f5",
+        padding: 20,
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center"
+      }}
+    >
+      <div style={{ width: "100%", maxWidth: 620 }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: 12,
+            marginBottom: 18
+          }}
+        >
+          <button
+            onClick={pauseSession}
+            style={{
+              ...button,
+              background: "#FF9800",
+              color: "#fff",
+              flex: 1
+            }}
+          >
+            ⏸️ Pausar
+          </button>
+
+          <div style={{ fontWeight: 900, fontSize: 22, opacity: 0.8 }}>
+            {index + 1}/{session.length}
+          </div>
+
+          <button
+            onClick={endSession}
+            style={{
+              ...button,
+              background: "#f44336",
+              color: "#fff",
+              flex: 1
+            }}
+          >
+            ⛔ Encerrar
+          </button>
+        </div>
+
+        <div
+          style={{
+            perspective: "1200px",
+            marginTop: 10
+          }}
+        >
+          <div
+            onClick={() => {
+              flipSound.currentTime = 0;
+              flipSound.play();
+              setShowBack(!showBack);
+            }}
+            style={{
+              position: "relative",
+              width: "100%",
+              minHeight: 260,
+              transformStyle: "preserve-3d",
+              transition: "transform 600ms cubic-bezier(.2,.8,.2,1)",
+              transform: showBack ? "rotateY(180deg)" : "rotateY(0deg)",
+              cursor: "pointer"
+            }}
+          >
+            {/* FRENTE */}
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                padding: 24,
+                borderRadius: 24,
+                background: dark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+                border: dark ? "1px solid rgba(255,255,255,0.10)" : "1px solid rgba(0,0,0,0.08)",
+                backfaceVisibility: "hidden",
+                WebkitBackfaceVisibility: "hidden",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                textAlign: "center",
+                fontSize: 28,
+                fontWeight: 800,
+                lineHeight: 1.25,
+                color: dark ? "#fff" : "#111",
+                boxShadow: dark ? "0 18px 45px rgba(0,0,0,0.35)" : "0 18px 45px rgba(0,0,0,0.10)"
+              }}
+            >
+              {session[index].question}
+            </div>
+
+            {/* VERSO */}
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                padding: 24,
+                borderRadius: 24,
+                background: dark ? "rgba(255,255,255,0.10)" : "rgba(255,255,255,0.95)",
+                border: dark ? "1px solid rgba(255,255,255,0.14)" : "1px solid rgba(0,0,0,0.08)",
+                backfaceVisibility: "hidden",
+                WebkitBackfaceVisibility: "hidden",
+                transform: "rotateY(180deg)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                textAlign: "center",
+                fontSize: 24,
+                fontWeight: 700,
+                lineHeight: 1.3,
+                color: dark ? "#fff" : "#111",
+                boxShadow: dark ? "0 18px 45px rgba(0,0,0,0.35)" : "0 18px 45px rgba(0,0,0,0.10)"
+              }}
+            >
+              {session[index].answer}
+            </div>
+          </div>
+
+          <p
+            style={{
+              marginTop: 12,
+              marginBottom: 0,
+              fontSize: 13,
+              opacity: 0.7,
+              textAlign: "center"
+            }}
+          >
+            Toque na carta para virar
+          </p>
+        </div>
+
+        {showBack && (
+          <div
+            style={{
+              marginTop: 22,
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: 12
+            }}
+          >
+            <button
+              onClick={() => rate(2)}
+              style={{ ...button, background: "#ef5350", color: "#fff" }}
+            >
+              ❌ Esqueci
+            </button>
+
+            <button
+              onClick={() => rate(3)}
+              style={{ ...button, background: "#ffa726", color: "#fff" }}
+            >
+              ⚠️ Difícil
+            </button>
+
+            <button
+              onClick={() => rate(4)}
+              style={{ ...button, background: "#66bb6a", color: "#fff" }}
+            >
+              👍 Bom
+            </button>
+
+            <button
+              onClick={() => rate(5)}
+              style={{ ...button, background: "#42a5f5", color: "#fff" }}
+            >
+              🚀 Fácil
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
   return (
     <div style={container}>
       <div style={headerBox}>
@@ -618,6 +983,7 @@ const headerProgressFill = {
         Treine sua mente. Evolua todos os dias.
       </p>
     </div>
+    
 
     <button
       onClick={() => setDark(!dark)}
@@ -635,6 +1001,26 @@ const headerProgressFill = {
       {dark ? "🌙" : "☀️"}
     </button>
   </div>
+
+<div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 14, gap: 12 }}>
+  <p style={{ margin: 0, opacity: 0.8, fontSize: 13 }}>
+    <strong>{user.email}</strong>
+  </p>
+
+  <button
+    onClick={handleLogout}
+    style={{
+      ...button,
+      background: "#f44336",
+      color: "#fff",
+      width: "auto",
+      padding: "10px 14px"
+    }}
+  >
+    Sair
+  </button>
+</div>
+
 
   {activeDeck && (
     <>
@@ -676,7 +1062,9 @@ const headerProgressFill = {
   )}
 </div>
            {/* Tabs (cara de app) */}
-<div style={tabsBar}>
+{/* Tabs (cara de app) */}
+{!studyStarted && (
+  <div style={tabsBar}>
   <button
     onClick={() => setTab("today")}
     style={{ ...tabBtn, ...(tab === "today" ? tabBtnActive : {}) }}
@@ -712,6 +1100,7 @@ const headerProgressFill = {
     Stats
   </button>
 </div>
+)}
 
       {/* Tema (mantive, mas agora fica numa “área” e não espalhado) */}
       
@@ -936,176 +1325,46 @@ const headerProgressFill = {
   <div style={box}>
     <h3>Study</h3>
 
-{studyStarted && session.length > 0 && (
-  <>
-    <button
-      onClick={pauseSession}
-      style={{
-        ...button,
-        background: "#FF9800",
-        color: "#fff",
-        marginBottom: 12
-      }}
-    >
-      Pausar sessão
-    </button>
-
-    <button
-      onClick={endSession}
-      style={{
-        ...button,
-        background: "#f44336",
-        color: "#fff",
-        marginBottom: 12
-      }}
-    >
-      Encerrar sessão
-    </button>
-  </>
-)}
-
-    {session.length > 0 && (
-      <>
-        <p>
-          {index + 1}/{session.length}
-        </p>
-
-        <div
-  style={{
-    perspective: "1200px",
-    marginTop: 10
-  }}
->
-  <div
-    onClick={() => {
-  flipSound.currentTime = 0;
-  flipSound.play();
-  setShowBack(!showBack);
-}}
-    style={{
-      position: "relative",
-      width: "100%",
-      minHeight: 160,
-      transformStyle: "preserve-3d",
-      transition: "transform 600ms cubic-bezier(.2,.8,.2,1)",
-      transform: showBack ? "rotateY(180deg)" : "rotateY(0deg)",
-      cursor: "pointer"
-    }}
-  >
-    {/* FRENTE */}
     <div
       style={{
-        position: "absolute",
-        inset: 0,
-        padding: 18,
-        borderRadius: 18,
-        background: dark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
-        border: dark ? "1px solid rgba(255,255,255,0.10)" : "1px solid rgba(0,0,0,0.08)",
-        backfaceVisibility: "hidden",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
         textAlign: "center",
-        fontSize: 22,
-        fontWeight: 800,
-        lineHeight: 1.2,
-        boxShadow: dark ? "0 18px 45px rgba(0,0,0,0.35)" : "0 18px 45px rgba(0,0,0,0.10)"
+        padding: "20px 10px",
+        opacity: 0.9
       }}
     >
-      {session[index].question}
+      {dueCount === 0 ? (
+        <>
+          <div style={{ fontSize: 40, marginBottom: 10 }}>✅</div>
+          <h4 style={{ margin: 0, marginBottom: 6 }}>
+            Você está em dia!
+          </h4>
+          <p style={{ fontSize: 13, opacity: 0.7 }}>
+            Nenhuma carta precisa ser revisada agora.
+          </p>
+        </>
+      ) : (
+        <>
+          <div style={{ fontSize: 40, marginBottom: 10 }}>🧠</div>
+          <h4 style={{ margin: 0, marginBottom: 6 }}>
+            Pronto para estudar?
+          </h4>
+          <p style={{ fontSize: 13, opacity: 0.7, marginBottom: 16 }}>
+            Existem <strong>{dueCount}</strong> cartas esperando por você.
+          </p>
+
+          <button
+            onClick={startSession}
+            style={{
+              ...button,
+              background: "#4CAF50",
+              color: "#fff"
+            }}
+          >
+            ▶️ Começar sessão
+          </button>
+        </>
+      )}
     </div>
-
-    {/* VERSO */}
-    <div
-      style={{
-        position: "absolute",
-        inset: 0,
-        padding: 18,
-        borderRadius: 18,
-        background: dark ? "rgba(255,255,255,0.10)" : "rgba(255,255,255,0.9)",
-        border: dark ? "1px solid rgba(255,255,255,0.14)" : "1px solid rgba(0,0,0,0.08)",
-        backfaceVisibility: "hidden",
-        transform: "rotateY(180deg)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        textAlign: "center",
-        fontSize: 20,
-        fontWeight: 700,
-        lineHeight: 1.25,
-        boxShadow: dark ? "0 18px 45px rgba(0,0,0,0.35)" : "0 18px 45px rgba(0,0,0,0.10)"
-      }}
-    >
-      {session[index].answer}
-    </div>
-  </div>
-
-  <p style={{ marginTop: 10, marginBottom: 0, fontSize: 12, opacity: 0.7, textAlign: "center" }}>
-    Toque na carta para virar
-  </p>
-</div>
-
-        {showBack && (
-          <>
-            <button onClick={() => rate(2)} style={button}>
-              ❌ Esqueci
-            </button>
-            <button onClick={() => rate(3)} style={button}>
-              ⚠️ Difícil
-            </button>
-            <button onClick={() => rate(4)} style={button}>
-              👍 Bom
-            </button>
-            <button onClick={() => rate(5)} style={button}>
-              🚀 Fácil
-            </button>
-          </>
-        )}
-      </>
-    )}
-
-    {session.length === 0 && (
-  <div
-    style={{
-      textAlign: "center",
-      padding: "20px 10px",
-      opacity: 0.9
-    }}
-  >
-    {dueCount === 0 ? (
-      <>
-        <div style={{ fontSize: 40, marginBottom: 10 }}>✅</div>
-        <h4 style={{ margin: 0, marginBottom: 6 }}>
-          Você está em dia!
-        </h4>
-        <p style={{ fontSize: 13, opacity: 0.7 }}>
-          Nenhuma carta precisa ser revisada agora.
-        </p>
-      </>
-    ) : (
-      <>
-        <div style={{ fontSize: 40, marginBottom: 10 }}>🧠</div>
-        <h4 style={{ margin: 0, marginBottom: 6 }}>
-          Você ainda não iniciou uma sessão
-        </h4>
-        <p style={{ fontSize: 13, opacity: 0.7, marginBottom: 16 }}>
-          Existem <strong>{dueCount}</strong> cartas esperando por você.
-        </p>
-
-        <button
-          onClick={startSession}
-          style={{
-            ...button,
-            background: "#4CAF50",
-            color: "#fff"
-          }}
-        >
-          ▶️ Começar agora
-        </button>
-      </>
-    )}
-  </div>
-)}
   </div>
 )}
 
