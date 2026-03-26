@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { presetDecks } from "./data/presetDecks"
 import { auth, db } from "./firebase";
-import { collection, doc, setDoc, getDocs, updateDoc } from "firebase/firestore";
+import { collection, doc, setDoc, getDoc, getDocs, updateDoc, serverTimestamp } from "firebase/firestore";
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
@@ -9,6 +9,7 @@ import {
   signOut
 } from "firebase/auth";
 import { deleteDoc } from "firebase/firestore";
+import { FEATURES, hasAccess } from "./features";
 
 console.log("Auth:", auth);
 console.log("Firestore:", db);
@@ -100,14 +101,50 @@ export default function App() {
   }, []);
 
   const [activeDeckId, setActiveDeckId] = useState(null);
-  const activeDeck = allDecks.find(d => String(d.id) === String(activeDeckId));
-
-  const isPresetDeck = !!activeDeck?.isBuiltIn;
-
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [user, setUser] = useState(null);
+  const [userData, setUserData] = useState(null);
   const [toast, setToast] = useState(null);
+  const [userDataLoading, setUserDataLoading] = useState(false);
+
+  const isPremium = userData?.plan === "premium";
+  const currentPlan = userData?.plan || "free";
+
+  const activeDeck = allDecks.find(d => String(d.id) === String(activeDeckId));
+  const isPresetDeck = !!activeDeck?.isBuiltIn;
+  const isActiveDeckPremium = !!activeDeck?.premium;
+  const isLockedPresetDeck = isPresetDeck && isActiveDeckPremium && !isPremium;
+
+  const canUseCreateDecks = hasAccess("createDecks", isPremium);
+  const canUseAddCards = hasAccess("addCards", isPremium);
+  const canUseStudy = hasAccess("study", isPremium);
+  const canUseBeginnerPresetDecks = hasAccess("beginnerPresetDecks", isPremium);
+
+  const canUseStreak = hasAccess("streak", isPremium);
+  const canUseMedals = hasAccess("medals", isPremium);
+  const canUseAdvancedStats = hasAccess("advancedStats", isPremium);
+  const canUseIntermediatePresetDecks = hasAccess("intermediatePresetDecks", isPremium);
+  const canUseAdvancedPresetDecks = hasAccess("advancedPresetDecks", isPremium);
+  const canUseAiTools = hasAccess("aiTools", isPremium);
+  const canUseStreakArea = canUseStreak && canUseMedals;
+
+  const tabsBarRef = useRef(null);
+
+  const isDraggingTabsRef = useRef(false);
+  const tabsDragStartXRef = useRef(0);
+  const tabsScrollLeftRef = useRef(0);
+
+  const hideScrollbar = `
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .hide-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+`;
 
   const toastAnimation = `
 @keyframes fadeInUp {
@@ -122,9 +159,71 @@ export default function App() {
 }
 `;
 
+  async function ensureUserDocument(user) {
+    if (!user) return;
+
+    console.log("🔥 Rodando ensureUserDocument para:", user.uid);
+
+    const userRef = doc(db, "users", user.uid);
+    const userSnap = await getDoc(userRef);
+
+    if (!userSnap.exists()) {
+      console.log("🆕 Criando usuário no Firestore...");
+
+      await setDoc(userRef, {
+        uid: user.uid,
+        name: user.displayName || "",
+        email: user.email || "",
+        photoURL: user.photoURL || "",
+        plan: "free",
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+
+      console.log("✅ Usuário criado com sucesso");
+    } else {
+      console.log("👤 Usuário já existe");
+    }
+  }
+
+  async function loadUserData(uid) {
+    if (!uid) return null;
+
+    const userRef = doc(db, "users", uid);
+    const userSnap = await getDoc(userRef);
+
+    if (!userSnap.exists()) return null;
+
+    return {
+      id: userSnap.id,
+      ...userSnap.data()
+    };
+  }
+
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, currentUser => {
+    const unsubscribe = onAuthStateChanged(auth, async currentUser => {
       setUser(currentUser);
+
+      if (!currentUser) {
+        setUserData(null);
+        return;
+      }
+
+      setUserDataLoading(true);
+
+      try {
+        // garante que o usuário existe
+        await ensureUserDocument(currentUser);
+
+        // carrega dados do Firestore
+        const loadedUserData = await loadUserData(currentUser.uid);
+
+        setUserData(loadedUserData);
+      } catch (error) {
+        console.error("Erro ao carregar dados do usuário:", error);
+      } finally {
+        setUserDataLoading(false);
+      }
     });
 
     return () => unsubscribe();
@@ -182,6 +281,32 @@ export default function App() {
 
   const [newDeck, setNewDeck] = useState("");
 
+  async function updateMyPlan(newPlan) {
+    if (!user) {
+      showToast("Você precisa estar logado");
+      return;
+    }
+
+    try {
+      const userRef = doc(db, "users", user.uid);
+
+      await updateDoc(userRef, {
+        plan: newPlan,
+        updatedAt: serverTimestamp()
+      });
+
+      setUserData(prev => ({
+        ...prev,
+        plan: newPlan
+      }));
+
+      showToast(`Plano alterado para ${newPlan}`, "success");
+    } catch (error) {
+      console.error("Erro ao atualizar plano:", error);
+      showToast("Erro ao atualizar plano");
+    }
+  }
+
   async function createDeck() {
     const cleanName = newDeck.trim();
 
@@ -230,6 +355,43 @@ export default function App() {
     }
   }
 
+  function handleTabsMouseDown(e) {
+    const slider = tabsBarRef.current;
+    if (!slider) return;
+
+    isDraggingTabsRef.current = true;
+    tabsDragStartXRef.current = e.pageX - slider.offsetLeft;
+    tabsScrollLeftRef.current = slider.scrollLeft;
+  }
+
+  function handleTabsMouseMove(e) {
+    const slider = tabsBarRef.current;
+    if (!slider || !isDraggingTabsRef.current) return;
+
+    e.preventDefault();
+
+    const x = e.pageX - slider.offsetLeft;
+    const walk = x - tabsDragStartXRef.current;
+
+    slider.scrollLeft = tabsScrollLeftRef.current - walk;
+  }
+
+  function handleTabsMouseUp() {
+    isDraggingTabsRef.current = false;
+  }
+
+  function handleTabsMouseLeave() {
+    isDraggingTabsRef.current = false;
+  }
+
+  function canAccessPresetDeck(deck, isPremiumUser) {
+    if (!deck) return false;
+
+    if (!deck.premium) return true;
+
+    return isPremiumUser;
+  }
+
   async function addPresetDeckToAccount() {
     if (!user) {
       showToast("Você precisa estar logado");
@@ -237,6 +399,14 @@ export default function App() {
     }
 
     if (!activeDeck || !isPresetDeck) {
+      return;
+    }
+
+    const allowed = canAccessPresetDeck(activeDeck, isPremium);
+
+    if (!allowed) {
+      showToast("Este deck é exclusivo do Premium ✨");
+      setTab("premium");
       return;
     }
 
@@ -281,7 +451,6 @@ export default function App() {
       setTab("study");
 
       showToast("Deck adicionado à sua conta", "success");
-
     } catch (error) {
       console.error("Erro ao adicionar deck padrão:", error);
       showToast("Erro ao adicionar deck");
@@ -319,6 +488,16 @@ export default function App() {
     setTimeout(() => {
       setToast(null);
     }, 4000);
+  }
+
+  function canAccessPresetDeck(deck, isPremiumUser) {
+    if (!deck) return false;
+
+    // deck free → sempre pode acessar
+    if (!deck.premium) return true;
+
+    // deck premium → só premium pode acessar
+    return isPremiumUser;
   }
 
 
@@ -724,6 +903,49 @@ export default function App() {
     minHeight: "100vh"
   };
 
+  const premiumHero = {
+    padding: 20,
+    borderRadius: 24,
+    background: dark
+      ? "linear-gradient(135deg, rgba(124,92,255,0.22), rgba(90,139,255,0.16))"
+      : "linear-gradient(135deg, rgba(124,92,255,0.12), rgba(90,139,255,0.10))",
+    border: dark
+      ? "1px solid rgba(124,92,255,0.35)"
+      : "1px solid rgba(124,92,255,0.18)",
+    boxShadow: dark
+      ? "0 12px 40px rgba(0,0,0,0.28)"
+      : "0 12px 30px rgba(124,92,255,0.10)"
+  };
+
+  const premiumBadge = {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    padding: "6px 12px",
+    borderRadius: 999,
+    fontSize: 12,
+    fontWeight: 800,
+    background: dark ? "rgba(255,215,0,0.12)" : "rgba(255,215,0,0.18)",
+    border: "1px solid rgba(255,215,0,0.32)",
+    color: dark ? "#FFD76A" : "#8A6300"
+  };
+
+  const premiumFeatureCard = {
+    padding: 16,
+    borderRadius: 18,
+    background: dark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)",
+    border: dark ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.06)"
+  };
+
+  const premiumCompareCard = {
+    flex: 1,
+    minWidth: 240,
+    padding: 16,
+    borderRadius: 18,
+    background: dark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)",
+    border: dark ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.06)"
+  };
+
   const box = {
     background: dark ? "#1e1e1e" : "#fff",
     borderRadius: 18,
@@ -771,13 +993,14 @@ export default function App() {
     background: dark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.05)",
     border: dark ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.06)",
     marginBottom: 16,
-    overflowX: "auto"
+    overflowX: "auto",
+    WebkitOverflowScrolling: "touch",
+    cursor: "grab",
+    userSelect: "none"
   };
 
   const tabBtn = {
-    flex: 1,
-    minWidth: 0,
-    padding: "10px 8px",
+    padding: "10px 14px",
     borderRadius: 14,
     border: "none",
     cursor: "pointer",
@@ -786,7 +1009,11 @@ export default function App() {
     letterSpacing: 0.1,
     background: "transparent",
     color: dark ? "rgba(255,255,255,0.75)" : "rgba(0,0,0,0.7)",
-    whiteSpace: "nowrap"
+    whiteSpace: "nowrap",
+    flexShrink: 0,
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center"
   };
 
   const tabBtnActive = {
@@ -803,11 +1030,22 @@ export default function App() {
     border: dark ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.06)"
   };
   const headerBox = {
-    background: "#1e1e1e",
-    padding: "20px",
-    borderRadius: "16px",
-    marginBottom: "20px",
-    boxShadow: "0 4px 20px rgba(0,0,0,0.3)"
+    padding: 20,
+    borderRadius: 20,
+
+    background: dark
+      ? "linear-gradient(135deg, #1e1e1e, #121212)"
+      : "linear-gradient(135deg, #ffffff, #f3f4f6)",
+
+    border: dark
+      ? "1px solid rgba(255,255,255,0.08)"
+      : "1px solid rgba(0,0,0,0.06)",
+
+    boxShadow: dark
+      ? "0 20px 50px rgba(0,0,0,0.4)"
+      : "0 20px 50px rgba(0,0,0,0.08)",
+
+    backdropFilter: "blur(8px)"
   };
 
   const headerTitle = {
@@ -1118,14 +1356,30 @@ export default function App() {
   }
   return (
     <div style={container}>
-      <style>{toastAnimation}</style>
+      <style>{toastAnimation + hideScrollbar}</style>
       <div style={headerBox}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
           <div>
-            <h1 style={{ fontSize: 30, margin: 0, fontWeight: 900, letterSpacing: -0.5 }}>
+            <h1
+              style={{
+                fontSize: 30,
+                margin: 0,
+                fontWeight: 900,
+                letterSpacing: -0.5,
+                color: dark ? "#fff" : "#111"
+              }}
+            >
               Don't Forget It
             </h1>
-            <p style={{ opacity: 0.72, marginTop: 6, marginBottom: 0, fontSize: 13 }}>
+            <p
+              style={{
+                opacity: 0.72,
+                marginTop: 6,
+                marginBottom: 0,
+                fontSize: 13,
+                color: dark ? "#ccc" : "#555"
+              }}
+            >
               Treine sua mente. Evolua todos os dias.
             </p>
           </div>
@@ -1157,9 +1411,16 @@ export default function App() {
             onClick={handleLogout}
             style={{
               ...button,
-              background: "rgba(255,255,255,0.06)",
-              color: "#fff",
-              border: "1px solid rgba(255,255,255,0.08)",
+              background: dark
+                ? "rgba(255,255,255,0.06)"
+                : "rgba(0,0,0,0.04)",
+              color: dark ? "#fff" : "#111",
+              border: dark
+                ? "1px solid rgba(255,255,255,0.08)"
+                : "1px solid rgba(0,0,0,0.08)",
+              boxShadow: dark
+                ? "none"
+                : "0 6px 20px rgba(0,0,0,0.06)",
               width: "auto",
               padding: "10px 14px"
             }}
@@ -1167,6 +1428,64 @@ export default function App() {
             Sair
           </button>
         </div>
+
+        {user && (
+          <div style={{ marginTop: 20, fontSize: 14, opacity: 0.8 }}>
+            Plano atual: <strong>{currentPlan}</strong>
+          </div>
+        )}
+
+        {user && (
+          <div
+            style={{
+              marginTop: 16,
+              padding: 14,
+              borderRadius: 16,
+              background: dark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)",
+              border: dark ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.06)"
+            }}
+          >
+            <p style={{ marginTop: 0, marginBottom: 10, fontWeight: 800 }}>
+              Teste de Plano
+            </p>
+
+            <p style={{ marginTop: 0, marginBottom: 12, fontSize: 14, opacity: 0.8 }}>
+              Plano atual: <strong>{currentPlan}</strong>
+            </p>
+
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <button
+                onClick={() => updateMyPlan("free")}
+                style={{
+                  ...button,
+                  background: currentPlan === "free"
+                    ? "linear-gradient(135deg, #4CAF50, #43A047)"
+                    : dark
+                      ? "rgba(255,255,255,0.06)"
+                      : "rgba(0,0,0,0.06)",
+                  color: "#fff"
+                }}
+              >
+                Free
+              </button>
+
+              <button
+                onClick={() => updateMyPlan("premium")}
+                style={{
+                  ...button,
+                  background: currentPlan === "premium"
+                    ? "linear-gradient(135deg, #7C5CFF, #5A8BFF)"
+                    : dark
+                      ? "rgba(255,255,255,0.06)"
+                      : "rgba(0,0,0,0.06)",
+                  color: "#fff"
+                }}
+              >
+                Premium
+              </button>
+            </div>
+          </div>
+        )}
 
 
         {activeDeck && (
@@ -1211,7 +1530,15 @@ export default function App() {
       {/* Tabs (cara de app) */}
       {/* Tabs (cara de app) */}
       {!studyStarted && (
-        <div style={tabsBar}>
+        <div
+          ref={tabsBarRef}
+          style={tabsBar}
+          className="hide-scrollbar"
+          onMouseDown={handleTabsMouseDown}
+          onMouseMove={handleTabsMouseMove}
+          onMouseUp={handleTabsMouseUp}
+          onMouseLeave={handleTabsMouseLeave}
+        >
           <button
             onClick={() => setTab("today")}
             style={{ ...tabBtn, ...(tab === "today" ? tabBtnActive : {}) }}
@@ -1245,6 +1572,13 @@ export default function App() {
             style={{ ...tabBtn, ...(tab === "stats" ? tabBtnActive : {}) }}
           >
             Stats
+          </button>
+
+          <button
+            onClick={() => setTab("premium")}
+            style={{ ...tabBtn, ...(tab === "premium" ? tabBtnActive : {}) }}
+          >
+            ✨ Premium
           </button>
         </div>
       )}
@@ -1319,17 +1653,92 @@ export default function App() {
             padding: 14,
             borderRadius: 16,
             background: dark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)",
-            border: dark ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.06)"
+            border: isActiveDeckPremium
+              ? "1px solid rgba(255, 215, 0, 0.28)"
+              : dark
+                ? "1px solid rgba(255,255,255,0.08)"
+                : "1px solid rgba(0,0,0,0.06)"
           }}
         >
-          <p style={{ marginTop: 0, marginBottom: 8, fontWeight: 800 }}>
-            {activeDeck.name}
-          </p>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              flexWrap: "wrap",
+              marginBottom: 8
+            }}
+          >
+            <p style={{ marginTop: 0, marginBottom: 0, fontWeight: 800 }}>
+              {activeDeck.name}
+            </p>
+
+            {isActiveDeckPremium && (
+              <span
+                style={{
+                  fontSize: 12,
+                  fontWeight: 800,
+                  padding: "4px 8px",
+                  borderRadius: 999,
+                  background: dark ? "rgba(255,215,0,0.12)" : "rgba(255,215,0,0.18)",
+                  border: "1px solid rgba(255,215,0,0.32)",
+                  color: dark ? "#FFD76A" : "#8A6300"
+                }}
+              >
+                ✨ Premium
+              </span>
+            )}
+          </div>
 
           {activeDeck.description && (
-            <p style={{ fontSize: 13, opacity: 0.75, marginTop: 0, marginBottom: 14, lineHeight: 1.5 }}>
+            <p
+              style={{
+                fontSize: 13,
+                opacity: 0.75,
+                marginTop: 0,
+                marginBottom: isLockedPresetDeck ? 8 : 14,
+                lineHeight: 1.5
+              }}
+            >
               {activeDeck.description}
             </p>
+          )}
+
+          {isLockedPresetDeck && (
+            <div
+              style={{
+                marginBottom: 14,
+                padding: 12,
+                borderRadius: 14,
+                background: dark ? "rgba(255,215,0,0.08)" : "rgba(255,215,0,0.12)",
+                border: "1px solid rgba(255,215,0,0.22)"
+              }}
+            >
+              <p
+                style={{
+                  fontSize: 13,
+                  marginTop: 0,
+                  marginBottom: 8,
+                  lineHeight: 1.5,
+                  color: dark ? "#FFD76A" : "#8A6300",
+                  fontWeight: 700
+                }}
+              >
+                Este deck faz parte da experiência Premium.
+              </p>
+
+              <button
+                onClick={() => setTab("premium")}
+                style={{
+                  ...button,
+                  background: "linear-gradient(135deg, #7C5CFF, #5A8BFF)",
+                  color: "#fff",
+                  boxShadow: "0 8px 24px rgba(124,92,255,0.22)"
+                }}
+              >
+                ✨ Ver Premium
+              </button>
+            </div>
           )}
 
           <button
@@ -1337,25 +1746,25 @@ export default function App() {
             disabled={loading}
             style={{
               ...button,
-              background: "linear-gradient(135deg, #7C5CFF, #5A8BFF)",
+              background: isLockedPresetDeck
+                ? dark
+                  ? "rgba(255,255,255,0.08)"
+                  : "rgba(0,0,0,0.08)"
+                : "linear-gradient(135deg, #7C5CFF, #5A8BFF)",
               color: "#fff",
-              boxShadow: "0 8px 30px rgba(124,92,255,0.25)",
-              opacity: loading ? 0.7 : 1,
+              boxShadow: isLockedPresetDeck
+                ? "none"
+                : "0 8px 30px rgba(124,92,255,0.25)",
+              opacity: loading ? 0.7 : isLockedPresetDeck ? 0.9 : 1,
               cursor: loading ? "not-allowed" : "pointer"
             }}
           >
-            {loading ? "Salvando..." : "Adicionar à minha conta"}
+            {loading
+              ? "Salvando..."
+              : isLockedPresetDeck
+                ? "🔒 Disponível no Premium"
+                : "Adicionar à minha conta"}
           </button>
-        </div>
-      )}
-
-      {/* Se não tem deck ativo e não está na aba decks, mostra aviso */}
-      {!activeDeck && tab !== "decks" && (
-        <div style={hintBox}>
-          <h3 style={{ marginTop: 0 }}>👋 Primeiro selecione um deck</h3>
-          <p style={{ opacity: 0.75, marginBottom: 0 }}>
-            Vá na aba <strong>Decks</strong>, crie ou selecione um deck.
-          </p>
         </div>
       )}
 
@@ -1455,36 +1864,122 @@ export default function App() {
               </div>
 
               {/* Streak + medalha */}
-              <div
-                style={{
-                  padding: 14,
-                  borderRadius: 16,
-                  background: dark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
-                  border: dark ? "1px solid rgba(255,255,255,0.10)" : "1px solid rgba(0,0,0,0.08)"
-                }}
-              >
-                <div style={{ fontSize: 12, opacity: 0.75, fontWeight: 800 }}>
-                  🔥 Streak
-                </div>
-
+              {canUseStreakArea ? (
                 <div
                   style={{
-                    display: "flex",
-                    alignItems: "baseline",
-                    justifyContent: "space-between",
-                    marginTop: 6
+                    padding: 14,
+                    borderRadius: 16,
+                    background: dark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+                    border: dark ? "1px solid rgba(255,255,255,0.10)" : "1px solid rgba(0,0,0,0.08)"
                   }}
                 >
-                  <div style={{ fontSize: 26, fontWeight: 900 }}>{streak}</div>
-                  <div style={{ fontSize: 12, opacity: 0.75, fontWeight: 800 }}>
-                    {streakMedal.next ? `Próx: ${streakMedal.next}` : "Topo!"}
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 8,
+                      flexWrap: "wrap"
+                    }}
+                  >
+                    <div style={{ fontSize: 12, opacity: 0.75, fontWeight: 800 }}>
+                      🔥 Streak
+                    </div>
+
+                    <span
+                      style={{
+                        fontSize: 12,
+                        fontWeight: 800,
+                        padding: "4px 8px",
+                        borderRadius: 999,
+                        background: dark ? "rgba(255,215,0,0.12)" : "rgba(255,215,0,0.18)",
+                        border: "1px solid rgba(255,215,0,0.32)",
+                        color: dark ? "#FFD76A" : "#8A6300"
+                      }}
+                    >
+                      ✨ Premium
+                    </span>
+                  </div>
+
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "baseline",
+                      justifyContent: "space-between",
+                      marginTop: 6
+                    }}
+                  >
+                    <div style={{ fontSize: 26, fontWeight: 900 }}>{streak}</div>
+                    <div style={{ fontSize: 12, opacity: 0.75, fontWeight: 800 }}>
+                      {streakMedal.next ? `Próx: ${streakMedal.next}` : "Topo!"}
+                    </div>
+                  </div>
+
+                  <div style={{ fontSize: 12, opacity: 0.85, marginTop: 8, lineHeight: 1.2 }}>
+                    <strong>Medalha:</strong> {streakMedal.medal}
                   </div>
                 </div>
+              ) : (
+                <div
+                  style={{
+                    padding: 14,
+                    borderRadius: 16,
+                    background: dark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+                    border: "1px solid rgba(255,215,0,0.22)"
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: 8,
+                      flexWrap: "wrap"
+                    }}
+                  >
+                    <div style={{ fontSize: 12, opacity: 0.75, fontWeight: 800 }}>
+                      🔥 Streak
+                    </div>
 
-                <div style={{ fontSize: 12, opacity: 0.85, marginTop: 8, lineHeight: 1.2 }}>
-                  <strong>Medalha:</strong> {streakMedal.medal}
+                    <span
+                      style={{
+                        fontSize: 12,
+                        fontWeight: 800,
+                        padding: "4px 8px",
+                        borderRadius: 999,
+                        background: dark ? "rgba(255,215,0,0.12)" : "rgba(255,215,0,0.18)",
+                        border: "1px solid rgba(255,215,0,0.32)",
+                        color: dark ? "#FFD76A" : "#8A6300"
+                      }}
+                    >
+                      ✨ Premium
+                    </span>
+                  </div>
+
+                  <p style={{ marginTop: 10, marginBottom: 8, fontSize: 14, lineHeight: 1.5, opacity: 0.82 }}>
+                    Desbloqueie sua sequência de estudos e acompanhe medalhas por consistência ao longo do tempo.
+                  </p>
+
+                  <div style={{ fontSize: 13, opacity: 0.85, lineHeight: 1.4 }}>
+                    <div>• Dias consecutivos de estudo</div>
+                    <div>• Próxima medalha</div>
+                    <div>• Medalhas por marcos</div>
+                  </div>
+
+                  <button
+                    onClick={() => setTab("premium")}
+                    style={{
+                      ...button,
+                      marginTop: 12,
+                      background: "linear-gradient(135deg, #7C5CFF, #5A8BFF)",
+                      color: "#fff",
+                      boxShadow: "0 8px 24px rgba(124,92,255,0.22)"
+                    }}
+                  >
+                    ✨ Ver Premium
+                  </button>
                 </div>
-              </div>
+              )}
             </div>
 
             {/* Barra de progresso */}
@@ -1574,36 +2069,136 @@ export default function App() {
       {/* ABA: STATS */}
       {activeDeck && tab === "stats" && (
         <>
-          <div style={box}>
-            <h3>🧠 Evolução Cognitiva</h3>
+          {canUseAdvancedStats ? (
+            <div style={box}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  flexWrap: "wrap",
+                  marginBottom: 10
+                }}
+              >
+                <h3 style={{ margin: 0 }}>🧠 Evolução Cognitiva</h3>
 
-            <p>
-              🏆 Nível: <strong>{getCognitiveLevel(averageStability)}</strong>
-            </p>
-            <p>🧠 Estabilidade média: {averageStability.toFixed(2)}</p>
-            <p>📊 Retenção média: {(averageRetention * 100).toFixed(1)}%</p>
-            <p>⚡ Tempo médio resposta: {averageResponseTime.toFixed(2)}s</p>
+                <span
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 800,
+                    padding: "4px 8px",
+                    borderRadius: 999,
+                    background: dark ? "rgba(255,215,0,0.12)" : "rgba(255,215,0,0.18)",
+                    border: "1px solid rgba(255,215,0,0.32)",
+                    color: dark ? "#FFD76A" : "#8A6300"
+                  }}
+                >
+                  ✨ Premium
+                </span>
+              </div>
 
-            <hr
-              style={{
-                border: "none",
-                borderTop: dark
-                  ? "1px solid rgba(255,255,255,0.10)"
-                  : "1px solid rgba(0,0,0,0.08)",
-                margin: "14px 0"
-              }}
-            />
+              <p>
+                🏆 Nível: <strong>{getCognitiveLevel(averageStability)}</strong>
+              </p>
+              <p>🧠 Estabilidade média: {averageStability.toFixed(2)}</p>
+              <p>📊 Retenção média: {(averageRetention * 100).toFixed(1)}%</p>
+              <p>⚡ Tempo médio resposta: {averageResponseTime.toFixed(2)}s</p>
 
-            <div
-              style={{
-                fontSize: 13,
-                lineHeight: 1.4,
-                opacity: 0.9
-              }}
-            >
-              <strong>Insight:</strong> {insightText}
+              <hr
+                style={{
+                  border: "none",
+                  borderTop: dark
+                    ? "1px solid rgba(255,255,255,0.10)"
+                    : "1px solid rgba(0,0,0,0.08)",
+                  margin: "14px 0"
+                }}
+              />
+
+              <div
+                style={{
+                  fontSize: 13,
+                  lineHeight: 1.4,
+                  opacity: 0.9
+                }}
+              >
+                <strong>Insight:</strong> {insightText}
+              </div>
             </div>
-          </div>
+          ) : (
+            <div style={box}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  flexWrap: "wrap",
+                  marginBottom: 10
+                }}
+              >
+                <h3 style={{ margin: 0 }}>🧠 Evolução Cognitiva</h3>
+
+                <span
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 800,
+                    padding: "4px 8px",
+                    borderRadius: 999,
+                    background: dark ? "rgba(255,215,0,0.12)" : "rgba(255,215,0,0.18)",
+                    border: "1px solid rgba(255,215,0,0.32)",
+                    color: dark ? "#FFD76A" : "#8A6300"
+                  }}
+                >
+                  ✨ Premium
+                </span>
+              </div>
+
+              <p style={{ marginTop: 0, opacity: 0.82, lineHeight: 1.6 }}>
+                Desbloqueie análises mais profundas sobre sua memória e seu desempenho
+                com métricas cognitivas avançadas.
+              </p>
+
+              <div
+                style={{
+                  marginTop: 14,
+                  padding: 12,
+                  borderRadius: 14,
+                  background: dark ? "rgba(255,215,0,0.08)" : "rgba(255,215,0,0.12)",
+                  border: "1px solid rgba(255,215,0,0.22)"
+                }}
+              >
+                <p
+                  style={{
+                    marginTop: 0,
+                    marginBottom: 8,
+                    fontSize: 14,
+                    fontWeight: 700,
+                    color: dark ? "#FFD76A" : "#8A6300"
+                  }}
+                >
+                  Inclui no Premium:
+                </p>
+
+                <p style={{ margin: "4px 0", fontSize: 14 }}>• Nível cognitivo</p>
+                <p style={{ margin: "4px 0", fontSize: 14 }}>• Estabilidade média</p>
+                <p style={{ margin: "4px 0", fontSize: 14 }}>• Retenção média</p>
+                <p style={{ margin: "4px 0", fontSize: 14 }}>• Tempo médio de resposta</p>
+                <p style={{ margin: "4px 0", fontSize: 14 }}>• Insight automático</p>
+              </div>
+
+              <button
+                onClick={() => setTab("premium")}
+                style={{
+                  ...button,
+                  marginTop: 14,
+                  background: "linear-gradient(135deg, #7C5CFF, #5A8BFF)",
+                  color: "#fff",
+                  boxShadow: "0 8px 24px rgba(124,92,255,0.22)"
+                }}
+              >
+                ✨ Ver Premium
+              </button>
+            </div>
+          )}
 
           <div style={box}>
             <h3>📈 Semana</h3>
@@ -1612,7 +2207,7 @@ export default function App() {
                 <div key={i} style={{ flex: 1, textAlign: "center" }}>
                   <div
                     style={{
-                      height: `${(d.count / maxWeekly) * 100}%`,
+                      height: `${maxWeekly > 0 ? (d.count / maxWeekly) * 100 : 0}%`,
                       background: "#FF9800",
                       margin: "0 4px",
                       borderRadius: 6,
@@ -1625,6 +2220,237 @@ export default function App() {
             </div>
           </div>
         </>
+      )}
+
+      {tab === "premium" && (
+        <div style={{ display: "grid", gap: 16 }}>
+          <div style={premiumHero}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
+              <div>
+                <div style={premiumBadge}>
+                  ✨ {currentPlan === "premium" ? "Você já é Premium" : "Upgrade disponível"}
+                </div>
+
+                <h2 style={{ marginTop: 14, marginBottom: 10, fontSize: 28, lineHeight: 1.1 }}>
+                  Leve sua memória para outro nível
+                </h2>
+
+                <p style={{ margin: 0, fontSize: 15, lineHeight: 1.6, opacity: 0.82, maxWidth: 700 }}>
+                  O Premium desbloqueia a camada mais poderosa do Don&apos;t Forget It:
+                  análise avançada, sequência de estudos, medalhas, decks mais completos,
+                  IA integrada e tudo o que vier nas próximas evoluções.
+                </p>
+              </div>
+
+              <div
+                style={{
+                  padding: 14,
+                  borderRadius: 18,
+                  minWidth: 180,
+                  background: dark ? "rgba(255,255,255,0.05)" : "rgba(255,255,255,0.45)",
+                  border: dark ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.06)"
+                }}
+              >
+                <p style={{ marginTop: 0, marginBottom: 6, fontSize: 12, opacity: 0.7 }}>
+                  Plano atual
+                </p>
+                <p style={{ margin: 0, fontSize: 22, fontWeight: 900 }}>
+                  {currentPlan === "premium" ? "Premium" : "Free"}
+                </p>
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 18 }}>
+              {currentPlan !== "premium" ? (
+                <button
+                  onClick={() => updateMyPlan("premium")}
+                  style={{
+                    ...button,
+                    background: "linear-gradient(135deg, #7C5CFF, #5A8BFF)",
+                    color: "#fff",
+                    boxShadow: "0 8px 30px rgba(124,92,255,0.25)"
+                  }}
+                >
+                  ✨ Desbloquear Premium
+                </button>
+              ) : (
+                <button
+                  onClick={() => showToast("Você já está no Premium ✨", "success")}
+                  style={{
+                    ...button,
+                    background: "linear-gradient(135deg, #4CAF50, #43A047)",
+                    color: "#fff"
+                  }}
+                >
+                  ✅ Premium ativo
+                </button>
+              )}
+
+              <button
+                onClick={() => setTab("decks")}
+                style={{
+                  ...button,
+                  background: dark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.06)",
+                  color: dark ? "#fff" : "#111"
+                }}
+              >
+                Ver decks
+              </button>
+            </div>
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+              gap: 14
+            }}
+          >
+            <div style={premiumFeatureCard}>
+              <p style={{ marginTop: 0, marginBottom: 8, fontWeight: 800 }}>📊 Stats avançadas</p>
+              <p style={{ margin: 0, fontSize: 14, opacity: 0.78, lineHeight: 1.5 }}>
+                Visualize evolução cognitiva, retenção, estabilidade e métricas mais profundas de aprendizado.
+              </p>
+            </div>
+
+            <div style={premiumFeatureCard}>
+              <p style={{ marginTop: 0, marginBottom: 8, fontWeight: 800 }}>🔥 Sequência de estudos</p>
+              <p style={{ margin: 0, fontSize: 14, opacity: 0.78, lineHeight: 1.5 }}>
+                Mantenha sua consistência diária com streaks e acompanhamento do seu ritmo real.
+              </p>
+            </div>
+
+            <div style={premiumFeatureCard}>
+              <p style={{ marginTop: 0, marginBottom: 8, fontWeight: 800 }}>🏅 Medalhas e progresso</p>
+              <p style={{ margin: 0, fontSize: 14, opacity: 0.78, lineHeight: 1.5 }}>
+                Desbloqueie medalhas por consistência e transforme seu estudo em uma jornada recompensadora.
+              </p>
+            </div>
+
+            <div style={premiumFeatureCard}>
+              <p style={{ marginTop: 0, marginBottom: 8, fontWeight: 800 }}>🧠 IA integrada</p>
+              <p style={{ margin: 0, fontSize: 14, opacity: 0.78, lineHeight: 1.5 }}>
+                Use IA para acelerar criação de conteúdo, melhorar cards e evoluir seu aprendizado.
+              </p>
+            </div>
+
+            <div style={premiumFeatureCard}>
+              <p style={{ marginTop: 0, marginBottom: 8, fontWeight: 800 }}>📚 Decks mais completos</p>
+              <p style={{ margin: 0, fontSize: 14, opacity: 0.78, lineHeight: 1.5 }}>
+                Acesse decks intermediários e avançados já organizados para estudar sem perder tempo.
+              </p>
+            </div>
+
+            <div style={premiumFeatureCard}>
+              <p style={{ marginTop: 0, marginBottom: 8, fontWeight: 800 }}>🚀 Futuras features</p>
+              <p style={{ margin: 0, fontSize: 14, opacity: 0.78, lineHeight: 1.5 }}>
+                Tudo o que entrar como recurso premium no futuro já se encaixa nessa camada.
+              </p>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+            <div style={premiumCompareCard}>
+              <p style={{ marginTop: 0, marginBottom: 12, fontWeight: 900, fontSize: 18 }}>
+                Free
+              </p>
+
+              <div style={{ display: "grid", gap: 10, fontSize: 14 }}>
+                <p style={{ margin: 0 }}>✅ Criar decks</p>
+                <p style={{ margin: 0 }}>✅ Adicionar cartas</p>
+                <p style={{ margin: 0 }}>✅ Estudar normalmente</p>
+                <p style={{ margin: 0 }}>✅ Acesso aos decks iniciantes</p>
+                <p style={{ margin: 0, opacity: 0.55 }}>— Stats avançadas</p>
+                <p style={{ margin: 0, opacity: 0.55 }}>— Sequência e medalhas</p>
+                <p style={{ margin: 0, opacity: 0.55 }}>— IA integrada</p>
+              </div>
+            </div>
+
+            <div
+              style={{
+                ...premiumCompareCard,
+                border: "1px solid rgba(124,92,255,0.30)",
+                boxShadow: "0 10px 30px rgba(124,92,255,0.12)"
+              }}
+            >
+              <p style={{ marginTop: 0, marginBottom: 12, fontWeight: 900, fontSize: 18 }}>
+                Premium ✨
+              </p>
+
+              <div style={{ display: "grid", gap: 10, fontSize: 14 }}>
+                <p style={{ margin: 0 }}>✅ Tudo do Free</p>
+                <p style={{ margin: 0 }}>✅ Stats avançadas</p>
+                <p style={{ margin: 0 }}>✅ Sequência de estudos</p>
+                <p style={{ margin: 0 }}>✅ Medalhas e progresso</p>
+                <p style={{ margin: 0 }}>✅ Decks intermediários e avançados</p>
+                <p style={{ margin: 0 }}>✅ IA integrada</p>
+                <p style={{ margin: 0 }}>✅ Novos recursos premium no futuro</p>
+              </div>
+            </div>
+          </div>
+
+          <div
+            style={{
+              padding: 16,
+              borderRadius: 18,
+              background: dark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)",
+              border: dark ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.06)"
+            }}
+          >
+            <p style={{ marginTop: 0, marginBottom: 8, fontWeight: 800 }}>
+              Por que o Premium existe?
+            </p>
+
+            <p style={{ margin: 0, fontSize: 14, lineHeight: 1.6, opacity: 0.8 }}>
+              Porque estudar não é só revisar cartas. É manter consistência, entender a própria evolução,
+              economizar tempo com conteúdo pronto e usar ferramentas mais inteligentes para aprender melhor.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {user && (
+        <div
+          style={{
+            marginTop: 16,
+            padding: 14,
+            borderRadius: 16,
+            background: dark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)",
+            border: dark ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.06)"
+          }}
+        >
+          <p style={{ marginTop: 0, marginBottom: 10, fontWeight: 800 }}>
+            Permissões do Plano
+          </p>
+
+          <p style={{ margin: "4px 0", fontSize: 14 }}>
+            Criar decks: <strong>{canUseCreateDecks ? "Sim" : "Não"}</strong>
+          </p>
+
+          <p style={{ margin: "4px 0", fontSize: 14 }}>
+            Adicionar cartas: <strong>{canUseAddCards ? "Sim" : "Não"}</strong>
+          </p>
+
+          <p style={{ margin: "4px 0", fontSize: 14 }}>
+            Study: <strong>{canUseStudy ? "Sim" : "Não"}</strong>
+          </p>
+
+          <p style={{ margin: "4px 0", fontSize: 14 }}>
+            Streak: <strong>{canUseStreak ? "Sim" : "Não"}</strong>
+          </p>
+
+          <p style={{ margin: "4px 0", fontSize: 14 }}>
+            Medalhas: <strong>{canUseMedals ? "Sim" : "Não"}</strong>
+          </p>
+
+          <p style={{ margin: "4px 0", fontSize: 14 }}>
+            Stats avançadas: <strong>{canUseAdvancedStats ? "Sim" : "Não"}</strong>
+          </p>
+
+          <p style={{ margin: "4px 0", fontSize: 14 }}>
+            IA: <strong>{canUseAiTools ? "Sim" : "Não"}</strong>
+          </p>
+        </div>
       )}
       {toast && (
         <div

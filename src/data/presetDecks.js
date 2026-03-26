@@ -8,6 +8,7 @@ export const presetDecks = [
       "Este deck foi criado para iniciantes que querem aprender espanhol de forma prática e natural, utilizando frases completas em vez de palavras isoladas. As cartas focam em situações reais do dia a dia, ajudando o aluno a desenvolver compreensão e comunicação desde o início.",
     level: "Iniciante",
     isBuiltIn: true,
+    premium: false,
     cards: [
       {
         id: "preset-10001",
@@ -237,7 +238,7 @@ export const presetDecks = [
         reviewHistory: [],
         stability: 1
       },
-            {
+      {
         id: "preset-10020",
         question: "¿Tienes algo más barato?",
         answer: "Você tem algo mais barato?",
@@ -357,7 +358,7 @@ export const presetDecks = [
         reviewHistory: [],
         stability: 1
       },
-            {
+      {
         id: "preset-10030",
         question: "No me gusta eso.",
         answer: "Eu não gosto disso.",
@@ -477,7 +478,7 @@ export const presetDecks = [
         reviewHistory: [],
         stability: 1
       },
-            {
+      {
         id: "preset-10040",
         question: "Practico todos los días.",
         answer: "Eu pratico todos os dias.",
