@@ -118,6 +118,27 @@ export default function App() {
   const isPresetDeck = !!activeDeck?.isBuiltIn;
   const isActiveDeckPremium = !!activeDeck?.premium;
   const isLockedPresetDeck = isPresetDeck && isActiveDeckPremium && !isPremium;
+  const userDecks = decks.filter(deck => !deck.isBuiltIn);
+
+  const nowIso = new Date().toISOString();
+
+  const todayDueCount = userDecks.reduce((total, deck) => {
+    const dueInDeck = (deck.cards || []).filter(card => {
+      return (card.nextReview || nowIso) <= nowIso;
+    }).length;
+
+    return total + dueInDeck;
+  }, 0);
+
+  const todayNewCardsCount = userDecks.reduce((total, deck) => {
+    const newInDeck = (deck.cards || []).filter(card => {
+      return !card.reviewHistory || card.reviewHistory.length === 0;
+    }).length;
+
+    return total + newInDeck;
+  }, 0);
+
+  const hasUserDecks = userDecks.length > 0;
 
   const canUseCreateDecks = hasAccess("createDecks", isPremium);
   const canUseAddCards = hasAccess("addCards", isPremium);
@@ -137,6 +158,105 @@ export default function App() {
   const isDraggingTabsRef = useRef(false);
   const tabsDragStartXRef = useRef(0);
   const tabsScrollLeftRef = useRef(0);
+
+  const studyDecks = userDecks;
+  const studyActiveDeck = studyDecks.find(
+    deck => String(deck.id) === String(activeDeckId)
+  ) || null;
+
+  const texts = {
+    pt: {
+      today: "Hoje",
+      study: "Estudar",
+      decks: "Decks",
+      add: "Carta",
+      premium: "Premium",
+      settings: "Configurações",
+
+      reminder: "Lembrete diário",
+      reminderDescription: "Receba um lembrete para entrar no app e estudar.",
+
+      activate: "Ativar lembrete",
+      deactivate: "Desativar",
+
+      language: "Idioma",
+      languageDescription: "Escolha o idioma da interface do aplicativo.",
+
+      todayTitle: "Seu dia",
+      toReview: "Para revisar",
+      newCards: "Cartas novas",
+      dailyGoal: "Meta diária",
+      streak: "Sequência",
+      startStudy: "Começar estudo",
+
+      studyReady: "Pronto para estudar",
+      studyMessage: "Existem {{count}} cartas esperando por você.",
+      startSession: "Começar sessão",
+
+      createDeck: "Criar deck",
+      newDeckName: "Nome do novo deck",
+      deleteDeck: "Excluir deck",
+
+      addCardTitle: "Adicionar carta",
+      question: "Pergunta",
+      answer: "Resposta",
+      addCard: "Adicionar carta",
+
+      stats: "Dados",
+      cognitiveEvolution: "Evolução cognitiva",
+      level: "Nível",
+      averageStability: "Estabilidade média",
+      averageRetention: "Retenção média",
+      averageResponseTime: "Tempo médio de resposta",
+      insight: "Insight"
+    },
+
+    en: {
+      today: "Today",
+      study: "Study",
+      decks: "Decks",
+      add: "Card",
+      premium: "Premium",
+      settings: "Settings",
+
+      reminder: "Daily reminder",
+      reminderDescription: "Receive a reminder to open the app and study.",
+
+      activate: "Enable reminder",
+      deactivate: "Disable",
+
+      language: "Language",
+      languageDescription: "Choose the app interface language.",
+
+      todayTitle: "Your day",
+      toReview: "To review",
+      newCards: "New cards",
+      dailyGoal: "Daily goal",
+      streak: "Streak",
+      startStudy: "Start study",
+
+      studyReady: "Ready to study",
+      studyMessage: "There are {{count}} cards waiting for you.",
+      startSession: "Start session",
+
+      createDeck: "Create deck",
+      newDeckName: "New deck name",
+      deleteDeck: "Delete deck",
+
+      addCardTitle: "Add card",
+      question: "Question",
+      answer: "Answer",
+      addCard: "Add card",
+
+      stats: "Stats",
+      cognitiveEvolution: "Cognitive evolution",
+      level: "Level",
+      averageStability: "Average stability",
+      averageRetention: "Average retention",
+      averageResponseTime: "Average response time",
+      insight: "Insight"
+    }
+  };
 
   const hideScrollbar = `
   .hide-scrollbar::-webkit-scrollbar {
@@ -189,6 +309,7 @@ export default function App() {
         name: user.displayName || "",
         email: user.email || "",
         photoURL: user.photoURL || "",
+        language: "pt",
         plan: "free",
         subscription: {
           plan: "free",
@@ -353,6 +474,34 @@ export default function App() {
     showToast("Lembrete ativado 🔔", "success");
   }
 
+  async function ensureUserLanguage(userDoc) {
+    if (!user || !userDoc) return;
+
+    if (userDoc.language) return;
+
+    try {
+      const userRef = doc(db, "users", user.uid);
+
+      await updateDoc(userRef, {
+        language: "pt",
+        updatedAt: serverTimestamp()
+      });
+    } catch (error) {
+      console.error("Erro ao garantir language:", error);
+    }
+  }
+
+  function t(key, vars = {}) {
+    const lang = userData?.language || "pt";
+    let text = texts[lang][key] || key;
+
+    Object.keys(vars).forEach(k => {
+      text = text.replace(`{{${k}}}`, vars[k]);
+    });
+
+    return text;
+  }
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async currentUser => {
       setUser(currentUser);
@@ -376,6 +525,9 @@ export default function App() {
         loadedUserData = await loadUserData(currentUser.uid);
 
         await ensureUserNotifications(loadedUserData);
+        loadedUserData = await loadUserData(currentUser.uid);
+
+        await ensureUserLanguage(loadedUserData);
         loadedUserData = await loadUserData(currentUser.uid);
 
         setUserData(loadedUserData);
@@ -1287,7 +1439,10 @@ export default function App() {
       : "#fff",
     color: dark ? "#fff" : "#111",
     fontSize: 14,
-    outline: "none"
+    outline: "none",
+    boxSizing: "border-box",
+    appearance: "none",
+    WebkitAppearance: "none"
   };
 
   const inputStyle = {
@@ -1890,42 +2045,42 @@ export default function App() {
             onClick={() => setTab("today")}
             style={{ ...tabBtn, ...(tab === "today" ? tabBtnActive : {}) }}
           >
-            Hoje
+            {t("today")}
           </button>
 
           <button
             onClick={() => setTab("study")}
             style={{ ...tabBtn, ...(tab === "study" ? tabBtnActive : {}) }}
           >
-            Study
+            {t("study")}
           </button>
 
           <button
             onClick={() => setTab("decks")}
             style={{ ...tabBtn, ...(tab === "decks" ? tabBtnActive : {}) }}
           >
-            Decks
+            {t("decks")}
           </button>
 
           <button
             onClick={() => setTab("add")}
             style={{ ...tabBtn, ...(tab === "add" ? tabBtnActive : {}) }}
           >
-            Carta
+            {t("add")}
           </button>
 
           <button
             onClick={() => setTab("stats")}
             style={{ ...tabBtn, ...(tab === "stats" ? tabBtnActive : {}) }}
           >
-            Stats
+            {t("stats")}
           </button>
 
           <button
             onClick={() => setTab("premium")}
             style={{ ...tabBtn, ...(tab === "premium" ? tabBtnActive : {}) }}
           >
-            ✨ Premium
+            ✨ {t("premium")}
           </button>
         </div>
       )}
@@ -1936,18 +2091,18 @@ export default function App() {
       {tab === "decks" && (
         <>
           <div style={{ ...box, ...formContainer }}>
-            <h3>Criar Deck</h3>
+            <h3>{t("createDeck")}</h3>
             <input
               value={newDeck}
               onChange={e => setNewDeck(e.target.value)}
-              placeholder="Nome do novo deck"
+              placeholder={t("newDeckName")}
               style={inputStyle}
             />
             <button
               onClick={createDeck}
               style={{ ...button, background: "#2196F3", color: "#fff" }}
             >
-              Criar Deck
+              {t("createDeck")}
             </button>
           </div>
 
@@ -1974,13 +2129,14 @@ export default function App() {
                 onClick={() => deleteDeck(activeDeck.id)}
                 style={{
                   ...button,
-                  marginTop: 10,
-                  background: "rgba(255,255,255,0.06)",
-                  color: "#fff",
-                  border: "1px solid rgba(255,255,255,0.08)"
+                  background: dark ? "rgba(255,255,255,0.06)" : "rgba(220,0,0,0.08)",
+                  color: dark ? "#fff" : "#B00020",
+                  border: dark
+                    ? "1px solid rgba(255,255,255,0.08)"
+                    : "1px solid rgba(176,0,32,0.18)"
                 }}
               >
-                🗑️ Excluir deck
+                🗑️ {t("deleteDeck")}
               </button>
             )}
 
@@ -2117,7 +2273,7 @@ export default function App() {
 
       {tab === "settings" && (
         <div style={box}>
-          <h3>⚙️ Configurações</h3>
+          <h3>⚙️ {t("settings")}</h3>
 
           <div
             style={{
@@ -2129,7 +2285,7 @@ export default function App() {
             }}
           >
             <div style={{ fontSize: 12, fontWeight: 800, opacity: 0.75 }}>
-              🔔 Lembrete diário
+              🔔 {t("reminder")}
             </div>
 
             <div style={{ marginTop: 8, fontSize: 14, opacity: 0.8 }}>
@@ -2158,7 +2314,7 @@ export default function App() {
                   color: "#fff"
                 }}
               >
-                Ativar lembrete
+                {t("activate")}
               </button>
             ) : (
               <button
@@ -2170,9 +2326,53 @@ export default function App() {
                   marginTop: 10
                 }}
               >
-                Desativar
+                {t("deactivate")}
               </button>
             )}
+          </div>
+          <div
+            style={{
+              marginTop: 20,
+              padding: 14,
+              borderRadius: 16,
+              background: dark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)"
+            }}
+          >
+            <div style={{ fontSize: 12, fontWeight: 800, opacity: 0.75 }}>
+              🌍 Idioma
+            </div>
+
+            <select
+              value={userData?.language || "pt"}
+              onChange={async (e) => {
+                const newLang = e.target.value;
+
+                const userRef = doc(db, "users", user.uid);
+
+                await updateDoc(userRef, {
+                  language: newLang,
+                  updatedAt: serverTimestamp()
+                });
+
+                setUserData(prev => ({
+                  ...prev,
+                  language: newLang
+                }));
+              }}
+              style={{
+                ...input,
+                marginTop: 10,
+                backgroundColor: dark ? "#23233A" : "#fff",
+                color: dark ? "#fff" : "#111"
+              }}
+            >
+              <option value="pt" style={{ color: "#111", backgroundColor: "#fff" }}>
+                Português
+              </option>
+              <option value="en" style={{ color: "#111", backgroundColor: "#fff" }}>
+                English
+              </option>
+            </select>
           </div>
         </div>
       )}
@@ -2180,33 +2380,65 @@ export default function App() {
       {/* ABA: ADICIONAR */}
       {activeDeck && tab === "add" && (
         <div style={{ ...box, ...formContainer }}>
-          <h3>➕ Adicionar Carta</h3>
+          <h3>➕ {t("addCardTitle")}</h3>
           <textarea
             value={front}
             onChange={e => setFront(e.target.value)}
-            placeholder="Pergunta"
+            placeholder={t("question")}
             style={{ ...inputStyle, minHeight: 80, resize: "none" }}
           />
           <textarea
             value={back}
             onChange={e => setBack(e.target.value)}
-            placeholder="Resposta"
+            placeholder={t("answer")}
             style={{ ...inputStyle, minHeight: 80, resize: "none" }}
           />
           <button
             onClick={addCard}
             style={{ ...button, background: "#9C27B0", color: "#fff" }}
           >
-            Adicionar Carta
+            {t("addCard")}
           </button>
         </div>
       )}
 
       {/* ABA: HOJE */}
-      {activeDeck && tab === "today" && (
+      {tab === "today" && (
         <>
           <div style={box}>
-            <h3>🔥 Seu Dia</h3>
+            <h3>🔥 {t("todayTitle")}</h3>
+
+            {!hasUserDecks && (
+              <div
+                style={{
+                  marginTop: 14,
+                  padding: 14,
+                  borderRadius: 16,
+                  background: dark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+                  border: dark ? "1px solid rgba(255,255,255,0.10)" : "1px solid rgba(0,0,0,0.08)"
+                }}
+              >
+                <div style={{ fontWeight: 800, marginBottom: 8 }}>
+                  📚 Nenhum deck ainda
+                </div>
+
+                <div style={{ fontSize: 14, opacity: 0.8, lineHeight: 1.5 }}>
+                  Crie seu primeiro deck ou copie um deck pronto para começar a estudar.
+                </div>
+
+                <button
+                  onClick={() => setTab("decks")}
+                  style={{
+                    ...button,
+                    marginTop: 12,
+                    background: "linear-gradient(135deg, #7C5CFF, #5A8BFF)",
+                    color: "#fff"
+                  }}
+                >
+                  Ir para Decks
+                </button>
+              </div>
+            )}
 
             {/* Dashboard 2x2 */}
             <div
@@ -2228,10 +2460,10 @@ export default function App() {
                 }}
               >
                 <div style={{ fontSize: 12, opacity: 0.75, fontWeight: 800 }}>
-                  📚 Para revisar
+                  📚 {t("toReview")}
                 </div>
                 <div style={{ fontSize: 26, fontWeight: 900, marginTop: 6 }}>
-                  {dueCount}
+                  {todayDueCount}
                 </div>
               </div>
 
@@ -2245,10 +2477,10 @@ export default function App() {
                 }}
               >
                 <div style={{ fontSize: 12, opacity: 0.75, fontWeight: 800 }}>
-                  🆕 Cartas novas
+                  🆕 {t("newCards")}
                 </div>
                 <div style={{ fontSize: 26, fontWeight: 900, marginTop: 6 }}>
-                  {newCardsCount}
+                  {todayNewCardsCount}
                 </div>
               </div>
 
@@ -2262,7 +2494,7 @@ export default function App() {
                 }}
               >
                 <div style={{ fontSize: 12, opacity: 0.75, fontWeight: 800 }}>
-                  🎯 Meta diária
+                  🎯 {t("dailyGoal")}
                 </div>
                 <div style={{ fontSize: 18, fontWeight: 900, marginTop: 8 }}>
                   {todayCount}/{DAILY_GOAL}
@@ -2292,7 +2524,7 @@ export default function App() {
                     }}
                   >
                     <div style={{ fontSize: 12, opacity: 0.75, fontWeight: 800 }}>
-                      🔥 Streak
+                      🔥 {t("streak")}
                     </div>
 
                     <span
@@ -2420,16 +2652,86 @@ export default function App() {
                 marginTop: 14
               }}
             >
-              ▶️ Começar Estudo
+              ▶️ {t("startStudy")}
             </button>
           </div>
         </>
       )}
 
       {/* ABA: STUDY */}
-      {activeDeck && tab === "study" && (
+      {tab === "study" && (
         <div style={box}>
           <h3>Study</h3>
+
+          <div style={box}>
+            <h3>📚 Escolha um deck para estudar</h3>
+
+            {studyDecks.length === 0 ? (
+              <p style={{ opacity: 0.8, lineHeight: 1.5 }}>
+                Você ainda não tem decks para estudar.
+              </p>
+            ) : (
+              <div
+                className="hide-scrollbar"
+                style={{
+                  display: "grid",
+                  gap: 10,
+                  maxHeight: 210,
+                  overflowY: "auto",
+                  paddingRight: 4,
+                  marginTop: 12
+                }}
+              >
+                {studyDecks.map(deck => {
+                  const dueInDeck = (deck.cards || []).filter(card => {
+                    return (card.nextReview || nowIso) <= nowIso;
+                  }).length;
+
+                  const isSelected = String(deck.id) === String(activeDeckId);
+
+                  return (
+                    <button
+                      key={deck.id}
+                      onClick={() => setActiveDeckId(deck.id)}
+                      style={{
+                        textAlign: "left",
+                        padding: 14,
+                        borderRadius: 16,
+                        cursor: "pointer",
+                        background: isSelected
+                          ? "linear-gradient(135deg, rgba(124,92,255,0.22), rgba(90,139,255,0.16))"
+                          : dark
+                            ? "rgba(255,255,255,0.06)"
+                            : "rgba(0,0,0,0.04)",
+                        color: dark ? "#fff" : "#111",
+                        border: isSelected
+                          ? "1px solid rgba(124,92,255,0.35)"
+                          : dark
+                            ? "1px solid rgba(255,255,255,0.08)"
+                            : "1px solid rgba(0,0,0,0.06)"
+                      }}
+                    >
+                      <div style={{ fontWeight: 800, marginBottom: 6 }}>
+                        {deck.name}
+                      </div>
+
+                      <div style={{ fontSize: 13, opacity: 0.78 }}>
+                        {dueInDeck} para revisar
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            {!studyActiveDeck && studyDecks.length > 0 && (
+              <div style={box}>
+                <h3>🧠 Pronto para estudar</h3>
+                <p style={{ opacity: 0.8, lineHeight: 1.5 }}>
+                  Escolha um deck acima para começar sua sessão.
+                </p>
+              </div>
+            )}
+          </div>
 
           <div
             style={{
@@ -2452,10 +2754,10 @@ export default function App() {
               <>
                 <div style={{ fontSize: 40, marginBottom: 10 }}>🧠</div>
                 <h4 style={{ margin: 0, marginBottom: 6 }}>
-                  Pronto para estudar?
+                  {t("studyReady")}?
                 </h4>
                 <p style={{ fontSize: 13, opacity: 0.7, marginBottom: 16 }}>
-                  Existem <strong>{dueCount}</strong> cartas esperando por você.
+                  {t("studyMessage", { count: dueCount })}
                 </p>
 
                 <button
@@ -2467,7 +2769,7 @@ export default function App() {
                     boxShadow: "0 8px 30px rgba(124,92,255,0.25)"
                   }}
                 >
-                  ▶️ Começar sessão
+                  ▶️ {t("startSession")}
                 </button>
               </>
             )}
@@ -2489,7 +2791,7 @@ export default function App() {
                   marginBottom: 10
                 }}
               >
-                <h3 style={{ margin: 0 }}>🧠 Evolução Cognitiva</h3>
+                <h3 style={{ margin: 0 }}>🧠 {t("cognitiveEvolution")}</h3>
 
                 <span
                   style={{
@@ -2507,11 +2809,11 @@ export default function App() {
               </div>
 
               <p>
-                🏆 Nível: <strong>{getCognitiveLevel(averageStability)}</strong>
+                🏆  {t("level")}: <strong>{getCognitiveLevel(averageStability)}</strong>
               </p>
-              <p>🧠 Estabilidade média: {averageStability.toFixed(2)}</p>
-              <p>📊 Retenção média: {(averageRetention * 100).toFixed(1)}%</p>
-              <p>⚡ Tempo médio resposta: {averageResponseTime.toFixed(2)}s</p>
+              <p>🧠 {t("averageStability")}: {averageStability.toFixed(2)}</p>
+              <p>📊 {t("averageRetention")}: {(averageRetention * 100).toFixed(1)}%</p>
+              <p>⚡ {t("averageResponseTime")}: {averageResponseTime.toFixed(2)}s</p>
 
               <hr
                 style={{
@@ -2530,7 +2832,7 @@ export default function App() {
                   opacity: 0.9
                 }}
               >
-                <strong>Insight:</strong> {insightText}
+                <strong>{t("insight")}:</strong> {insightText}
               </div>
             </div>
           ) : (
@@ -2841,49 +3143,7 @@ export default function App() {
         </div>
       )}
 
-      {user && (
-        <div
-          style={{
-            marginTop: 16,
-            padding: 14,
-            borderRadius: 16,
-            background: dark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.03)",
-            border: dark ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.06)"
-          }}
-        >
-          <p style={{ marginTop: 0, marginBottom: 10, fontWeight: 800 }}>
-            Permissões do Plano
-          </p>
 
-          <p style={{ margin: "4px 0", fontSize: 14 }}>
-            Criar decks: <strong>{canUseCreateDecks ? "Sim" : "Não"}</strong>
-          </p>
-
-          <p style={{ margin: "4px 0", fontSize: 14 }}>
-            Adicionar cartas: <strong>{canUseAddCards ? "Sim" : "Não"}</strong>
-          </p>
-
-          <p style={{ margin: "4px 0", fontSize: 14 }}>
-            Study: <strong>{canUseStudy ? "Sim" : "Não"}</strong>
-          </p>
-
-          <p style={{ margin: "4px 0", fontSize: 14 }}>
-            Streak: <strong>{canUseStreak ? "Sim" : "Não"}</strong>
-          </p>
-
-          <p style={{ margin: "4px 0", fontSize: 14 }}>
-            Medalhas: <strong>{canUseMedals ? "Sim" : "Não"}</strong>
-          </p>
-
-          <p style={{ margin: "4px 0", fontSize: 14 }}>
-            Stats avançadas: <strong>{canUseAdvancedStats ? "Sim" : "Não"}</strong>
-          </p>
-
-          <p style={{ margin: "4px 0", fontSize: 14 }}>
-            IA: <strong>{canUseAiTools ? "Sim" : "Não"}</strong>
-          </p>
-        </div>
-      )}
 
       {showSettings && (
         <div
@@ -2910,12 +3170,13 @@ export default function App() {
                 ? "1px solid rgba(255,255,255,0.08)"
                 : "1px solid rgba(0,0,0,0.06)",
               boxShadow: "0 10px 40px rgba(0,0,0,0.2)",
-              animation: "slideInLeft 0.25s ease"
+              animation: "slideInLeft 0.25s ease",
+              overflowY: "auto"
             }}
+            className="hide-scrollbar"
           >
-            <h3 style={{ marginTop: 0 }}>⚙️ Configurações</h3>
+            <h3 style={{ marginTop: 0 }}>⚙️ {t("settings")}</h3>
 
-            {/* NOTIFICAÇÕES */}
             <div
               style={{
                 marginTop: 16,
@@ -2926,11 +3187,11 @@ export default function App() {
               }}
             >
               <div style={{ fontSize: 12, fontWeight: 800, opacity: 0.75 }}>
-                🔔 Lembrete diário
+                🔔 {t("reminder")}
               </div>
 
-              <div style={{ marginTop: 8, fontSize: 14, opacity: 0.8 }}>
-                Receba um lembrete para entrar no app e estudar.
+              <div style={{ marginTop: 8, fontSize: 14, opacity: 0.8, lineHeight: 1.5 }}>
+                {t("reminderDescription")}
               </div>
 
               <input
@@ -2941,7 +3202,12 @@ export default function App() {
                 }
                 style={{
                   ...input,
-                  marginTop: 10
+                  marginTop: 10,
+                  width: "100%",
+                  maxWidth: "100%",
+                  minWidth: 0,
+                  boxSizing: "border-box",
+                  display: "block"
                 }}
               />
 
@@ -2955,7 +3221,7 @@ export default function App() {
                     color: "#fff"
                   }}
                 >
-                  Ativar lembrete
+                  {t("activate")}
                 </button>
               ) : (
                 <button
@@ -2967,9 +3233,65 @@ export default function App() {
                     marginTop: 10
                   }}
                 >
-                  Desativar
+                  {t("deactivate")}
                 </button>
               )}
+            </div>
+
+            <div
+              style={{
+                marginTop: 16,
+                padding: 14,
+                borderRadius: 16,
+                background: dark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+                border: dark ? "1px solid rgba(255,255,255,0.10)" : "1px solid rgba(0,0,0,0.08)"
+              }}
+            >
+              <div style={{ fontSize: 12, fontWeight: 800, opacity: 0.75 }}>
+                🌍 {t("language")}
+              </div>
+
+              <div style={{ marginTop: 8, fontSize: 14, opacity: 0.8, lineHeight: 1.5 }}>
+                {t("languageDescription")}
+              </div>
+
+              <select
+                value={userData?.language || "pt"}
+                onChange={async (e) => {
+                  const newLang = e.target.value;
+
+                  if (!user) return;
+
+                  try {
+                    const userRef = doc(db, "users", user.uid);
+
+                    await updateDoc(userRef, {
+                      language: newLang,
+                      updatedAt: serverTimestamp()
+                    });
+
+                    setUserData(prev => ({
+                      ...prev,
+                      language: newLang
+                    }));
+
+                    showToast(
+                      newLang === "pt" ? "Idioma atualizado" : "Language updated",
+                      "success"
+                    );
+                  } catch (error) {
+                    console.error("Erro ao atualizar idioma:", error);
+                    showToast("Erro ao atualizar idioma");
+                  }
+                }}
+                style={{
+                  ...input,
+                  marginTop: 10
+                }}
+              >
+                <option value="pt">Português</option>
+                <option value="en">English</option>
+              </select>
             </div>
           </div>
         </div>
