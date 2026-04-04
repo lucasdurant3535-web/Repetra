@@ -120,6 +120,8 @@ export default function App() {
   const [aiTheme, setAiTheme] = useState("");
   const [aiAmount, setAiAmount] = useState(10);
   const [aiUsageInfo, setAiUsageInfo] = useState(null);
+  const [authMode, setAuthMode] = useState("login");
+
 
   const subscription = userData?.subscription || {};
 
@@ -925,7 +927,10 @@ export default function App() {
     const checkout = params.get("checkout");
 
     if (checkout === "success") {
-      showToast("Pagamento realizado com sucesso! Agora é só aguardar a ativação do Premium.", "success");
+      setToast({
+        message: "Pagamento realizado com sucesso! Agora é só aguardar a ativação do Premium.",
+        type: "success"
+      });
 
       const newUrl = window.location.pathname;
       window.history.replaceState({}, document.title, newUrl);
@@ -1887,7 +1892,7 @@ export default function App() {
           />
 
           <button
-            onClick={handleLogin}
+            onClick={authMode === "login" ? handleLogin : handleRegister}
             style={{
               ...button,
               background: "linear-gradient(135deg, #7C5CFF, #5A8BFF)",
@@ -1897,22 +1902,23 @@ export default function App() {
               boxShadow: "0 8px 30px rgba(124,92,255,0.25)"
             }}
           >
-            Entrar
+            {authMode === "login" ? "Entrar" : "Criar conta"}
           </button>
 
-          <button
-            onClick={handleRegister}
+          <p
+            onClick={() => setAuthMode(authMode === "login" ? "register" : "login")}
             style={{
-              ...button,
-              background: "rgba(255,255,255,0.06)",
-              color: "#fff",
-              border: "1px solid rgba(255,255,255,0.08)",
-              width: "100%",
-              marginTop: 10
+              marginTop: 14,
+              fontSize: 14,
+              textAlign: "center",
+              opacity: 0.8,
+              cursor: "pointer"
             }}
           >
-            Criar conta
-          </button>
+            {authMode === "login"
+              ? "Não tem uma conta? Cadastre-se"
+              : "Já tem uma conta? Entrar"}
+          </p>
         </div>
       </div>
     );
