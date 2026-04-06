@@ -265,7 +265,7 @@ exports.createCheckoutSession = onCall(
         customer_email: email,
         line_items: [
           {
-            price: "price_1TILadL4aYADZfLHsUyIzORS",
+            price: "price_1TIKjAL4aYADZfLHqYQqCNV6",
             quantity: 1,
           },
         ],
