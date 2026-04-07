@@ -128,7 +128,7 @@ export default function App() {
   const currentPlan = subscription.plan || "free";
   const subscriptionStatus = subscription.status || "inactive";
 
-  const cancelAtPeriodEnd = subscription.cancelAtPeriodEnd || false;
+  const cancelAtPeriodEnd = subscription.cancelAtPeriodEnd;
   const currentPeriodEnd = subscription.currentPeriodEnd || null;
   const lastInvoiceStatus = subscription.lastInvoiceStatus || null;
 
@@ -136,7 +136,8 @@ export default function App() {
     currentPlan === "premium" &&
     (subscriptionStatus === "active" || subscriptionStatus === "past_due");
 
-  const isCancelScheduled = cancelAtPeriodEnd === true;
+  const isCancelScheduled =
+    cancelAtPeriodEnd === true || cancelAtPeriodEnd === "true";
 
   const isPaymentIssue = lastInvoiceStatus === "payment_failed";
 
