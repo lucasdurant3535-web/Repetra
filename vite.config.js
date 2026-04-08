@@ -5,38 +5,38 @@ import { VitePWA } from 'vite-plugin-pwa'
 export default defineConfig({
   plugins: [
     react(),
-   VitePWA({
-  registerType: "autoUpdate",
-  injectRegister: "auto",
+    VitePWA({
+      registerType: "autoUpdate",
+      injectRegister: "auto",
 
-  workbox: {
-    cleanupOutdatedCaches: true,
-    clientsClaim: true,
-    skipWaiting: true
-  },
-
-  manifest: {
-    name: "Don't Forget It",
-    short_name: "DFI",
-    description: "O primeiro sistema de memória que se adapta ao seu cérebro em tempo real.",
-    start_url: ".",
-    display: "standalone",
-    theme_color: "#121212",
-    background_color: "#121212",
-    icons: [
-      {
-        src: "/pwa-192x192.png",
-        sizes: "192x192",
-        type: "image/png"
+      workbox: {
+        cleanupOutdatedCaches: true,
+        clientsClaim: true,
+        skipWaiting: true
       },
-      {
-        src: "/pwa-512x512.png",
-        sizes: "512x512",
-        type: "image/png"
+
+      manifest: {
+        name: "Don't Forget It",
+        short_name: "DFI",
+        description: "O primeiro sistema de memória que se adapta ao seu cérebro em tempo real.",
+        start_url: ".",
+        display: "standalone",
+        background_color: "#121212",
+        theme_color: "#121212",
+        icons: [
+          {
+            src: "/logo-192.png",
+            sizes: "192x192",
+            type: "image/png"
+          },
+          {
+            src: "/logo-512.png",
+            sizes: "512x512",
+            type: "image/png"
+          }
+        ]
       }
-    ]
-  }
-})
+    })
   ],
 
   server: {

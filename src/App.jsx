@@ -2274,29 +2274,44 @@ export default function App() {
       </style>
       <div style={headerBox}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-          <div>
-            <h1
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <img
+              src="/logo-192.png"
+              alt="Don't Forget It logo"
               style={{
-                fontSize: 30,
-                margin: 0,
-                fontWeight: 900,
-                letterSpacing: -0.5,
-                color: dark ? "#fff" : "#111"
+                width: 36,
+                height: 36,
+                objectFit: "contain",
+                filter: "drop-shadow(0 0 10px rgba(124, 58, 237, 0.45))",
+                flexShrink: 0
               }}
-            >
-              Don't Forget It
-            </h1>
-            <p
-              style={{
-                opacity: 0.72,
-                marginTop: 6,
-                marginBottom: 0,
-                fontSize: 13,
-                color: dark ? "#ccc" : "#555"
-              }}
-            >
-              Treine sua mente. Evolua todos os dias.
-            </p>
+            />
+
+            <div>
+              <h1
+                style={{
+                  fontSize: 30,
+                  margin: 0,
+                  fontWeight: 900,
+                  letterSpacing: -0.5,
+                  color: dark ? "#fff" : "#111"
+                }}
+              >
+                Don't Forget It
+              </h1>
+
+              <p
+                style={{
+                  opacity: 0.72,
+                  marginTop: 6,
+                  marginBottom: 0,
+                  fontSize: 13,
+                  color: dark ? "#ccc" : "#555"
+                }}
+              >
+                Treine sua mente. Evolua todos os dias.
+              </p>
+            </div>
           </div>
 
           <button
