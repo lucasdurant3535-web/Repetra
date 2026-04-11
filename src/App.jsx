@@ -218,6 +218,8 @@ export default function App() {
 
   const FREE_NOTES_LIMIT = 10;
 
+  const APP_VERSION = "1.0.0";
+
   const hasReachedNotesLimit =
     !isPremium && (notes?.length || 0) >= FREE_NOTES_LIMIT;
 
@@ -726,56 +728,33 @@ export default function App() {
   }
 
   function canUseAI(userData) {
-    if (!userData) return { allowed: false, limit: 0, maxCards: 0 };
+    if (!userData) {
+      return {
+        allowed: false,
+        limit: 0,
+        maxCards: 0,
+        isPremium: false,
+        usage: { month: "", count: 0 },
+      };
+    }
 
-    const currentMonth = new Date().toISOString().slice(0, 7); // ex: 2026-03
+    const currentMonth = new Date().toISOString().slice(0, 7);
+    const { isPremium, limit, maxCards } = getCurrentAIPlanState(userData);
 
-    const usage = userData.aiUsage || {
+    let usage = userData.aiUsage || {
       month: currentMonth,
       count: 0,
     };
 
-    const isPremium = Boolean(
-      userData &&
-      (
-        userData.plan === "premium" ||
-        userData.subscription?.plan === "premium" ||
-        userData.subscription?.status === "active"
-      )
-    );
-
-    const FREE_LIMIT = 1;
-    const PREMIUM_LIMIT = 30;
-
-    const FREE_MAX_CARDS = 15;
-    const PREMIUM_MAX_CARDS = 30;
-
-    const limit = isPremium ? PREMIUM_LIMIT : FREE_LIMIT;
-    const maxCards = isPremium ? PREMIUM_MAX_CARDS : FREE_MAX_CARDS;
-
-
     if (usage.month !== currentMonth) {
-      return {
-        allowed: true,
-        usage: { month: currentMonth, count: 0 },
-        limit,
-        maxCards,
-        isPremium,
-      };
-    }
-
-    if (usage.count >= limit) {
-      return {
-        allowed: false,
-        usage,
-        limit,
-        maxCards,
-        isPremium,
+      usage = {
+        month: currentMonth,
+        count: 0,
       };
     }
 
     return {
-      allowed: true,
+      allowed: usage.count < limit,
       usage,
       limit,
       maxCards,
@@ -785,8 +764,7 @@ export default function App() {
 
   async function incrementAIUsage(user) {
     const userRef = doc(db, "users", user.uid);
-
-    const currentMonth = new Date().toISOString().slice(0, 7); // ex: 2026-03
+    const currentMonth = new Date().toISOString().slice(0, 7);
 
     const snap = await getDoc(userRef);
     const data = snap.data();
@@ -813,16 +791,20 @@ export default function App() {
     const snap = await getDoc(userRef);
     const userData = snap.data();
 
+    if (!userData) {
+      setAiUsageInfo({
+        current: 0,
+        limit: 1,
+        remaining: 1,
+        isPremium: false,
+      });
+      return;
+    }
+
     const currentMonth = new Date().toISOString().slice(0, 7);
+    const { isPremium, limit } = getCurrentAIPlanState(userData);
 
-    const isPremium =
-      userData?.plan === "premium" ||
-      userData?.subscription?.plan === "premium" ||
-      userData?.subscription?.status === "active";
-
-    const limit = isPremium ? 30 : 1;
-
-    let usage = userData?.aiUsage || {
+    let usage = userData.aiUsage || {
       month: currentMonth,
       count: 0,
     };
@@ -893,6 +875,109 @@ export default function App() {
     if (looksPortuguese) return false;
 
     return true;
+  }
+
+  async function handleGenerateCardsFromOpenedNote() {
+    try {
+      setAiLoading(true);
+      setAiError("");
+      setAiPreview(null);
+
+      if (!user) {
+        setAiError("Você precisa estar logado.");
+        return;
+      }
+
+      if (!openedNote) {
+        setAiError("Nenhuma nota aberta.");
+        return;
+      }
+
+      const noteTitle = (openedNote.title || "").trim();
+      const noteTopic = (openedNote.topic || "").trim();
+      const noteContent = (openedNote.content || "").trim();
+
+      if (!noteContent) {
+        setAiError("Essa nota está vazia.");
+        return;
+      }
+
+      if (noteContent.length > 2000) {
+        setAiError("A nota está muito longa. Reduza o conteúdo para gerar cards.");
+        return;
+      }
+
+      const userRef = doc(db, "users", user.uid);
+      const snap = await getDoc(userRef);
+      const freshUserData = snap.data();
+
+      const check = canUseAI(freshUserData);
+
+      if (!check.allowed) {
+        await loadAIUsage();
+        setAiError(`Você atingiu o limite mensal de gerações (${check.limit}).`);
+        return;
+      }
+
+      const promptFromNote = `
+Transforme a nota abaixo em um deck de estudo com cards claros e úteis.
+
+REGRAS IMPORTANTES:
+- Mantenha o idioma da nota
+- NÃO traduza automaticamente
+- Analise a complexidade do conteúdo
+- Ajuste o nível automaticamente (iniciante, intermediário ou avançado)
+- Crie perguntas claras e progressivas
+
+Título da nota: ${noteTitle || "Sem título"}
+Tópico: ${noteTopic || "Geral"}
+
+Conteúdo da nota:
+${noteContent}
+`.trim();
+
+      const safeAmount = Math.min(10, check.maxCards);
+
+      const res = await generateCardsWithAI({
+        theme: promptFromNote,
+        amount: safeAmount,
+        level: "auto",
+      });
+
+      if (res?.ok) {
+        setAiPreview(res.content);
+        setAiOpen(true);
+        await incrementAIUsage(user);
+        await loadAIUsage();
+        showToast?.("Cards gerados a partir da nota ✨", "success");
+      } else {
+        setAiError("A IA não retornou conteúdo.");
+      }
+    } catch (err) {
+      console.error(err);
+      setAiError(err?.message || "Erro ao gerar cartas com IA a partir da nota.");
+    } finally {
+      setAiLoading(false);
+    }
+  }
+
+  function getCurrentAIPlanState(userData) {
+    const subscription = userData?.subscription || {};
+
+    const currentPlan = subscription.plan || "free";
+    const subscriptionStatus = subscription.status || "inactive";
+
+    const isPremium =
+      currentPlan === "premium" &&
+      (subscriptionStatus === "active" || subscriptionStatus === "past_due");
+
+    return {
+      currentPlan,
+      subscriptionStatus,
+      isPremium,
+      limit: isPremium ? 30 : 1,
+      maxCards: isPremium ? 30 : 15,
+    };
   }
 
   function getDueCardsByTopic() {
@@ -3276,111 +3361,7 @@ export default function App() {
         </div>
       )}
 
-      {tab === "settings" && (
-        <div style={box}>
-          <h3>⚙️ {t("settings")}</h3>
 
-          <div
-            style={{
-              marginTop: 16,
-              padding: 14,
-              borderRadius: 16,
-              background: dark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
-              border: dark ? "1px solid rgba(255,255,255,0.10)" : "1px solid rgba(0,0,0,0.08)"
-            }}
-          >
-            <div style={{ fontSize: 12, fontWeight: 800, opacity: 0.75 }}>
-              🔔 {t("reminder")}
-            </div>
-
-            <div style={{ marginTop: 8, fontSize: 14, opacity: 0.8 }}>
-              Receba um lembrete para entrar no app e estudar.
-            </div>
-
-            <input
-              type="time"
-              value={userData?.notifications?.time || "20:00"}
-              onChange={(e) =>
-                updateNotificationSettings({ time: e.target.value })
-              }
-              style={{
-                ...input,
-                marginTop: 10
-              }}
-            />
-
-            {!userData?.notifications?.enabled ? (
-              <button
-                onClick={enableReminder}
-                style={{
-                  ...button,
-                  marginTop: 10,
-                  background: "linear-gradient(135deg, #7C5CFF, #5A8BFF)",
-                  color: "#fff"
-                }}
-              >
-                {t("activate")}
-              </button>
-            ) : (
-              <button
-                onClick={() =>
-                  updateNotificationSettings({ enabled: false })
-                }
-                style={{
-                  ...button,
-                  marginTop: 10
-                }}
-              >
-                {t("deactivate")}
-              </button>
-            )}
-          </div>
-          <div
-            style={{
-              marginTop: 20,
-              padding: 14,
-              borderRadius: 16,
-              background: dark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)"
-            }}
-          >
-            <div style={{ fontSize: 12, fontWeight: 800, opacity: 0.75 }}>
-              🌍 Idioma
-            </div>
-
-            <select
-              value={userData?.language || "pt"}
-              onChange={async (e) => {
-                const newLang = e.target.value;
-
-                const userRef = doc(db, "users", user.uid);
-
-                await updateDoc(userRef, {
-                  language: newLang,
-                  updatedAt: serverTimestamp()
-                });
-
-                setUserData(prev => ({
-                  ...prev,
-                  language: newLang
-                }));
-              }}
-              style={{
-                ...input,
-                marginTop: 10,
-                backgroundColor: dark ? "#23233A" : "#fff",
-                color: dark ? "#fff" : "#111"
-              }}
-            >
-              <option value="pt" style={{ color: "#111", backgroundColor: "#fff" }}>
-                Português
-              </option>
-              <option value="en" style={{ color: "#111", backgroundColor: "#fff" }}>
-                English
-              </option>
-            </select>
-          </div>
-        </div>
-      )}
 
       {/* ABA: ADICIONAR */}
       {tab === "add" && (
@@ -3823,6 +3804,24 @@ export default function App() {
                   Fechar
                 </button>
 
+                {!isEditingOpenedNote && (
+                  <button
+                    onClick={handleGenerateCardsFromOpenedNote}
+                    disabled={aiLoading}
+                    style={{
+                      ...button,
+                      width: "auto",
+                      padding: "10px 14px",
+                      background: "linear-gradient(135deg, #7C5CFF, #5A8BFF)",
+                      color: "#fff",
+                      opacity: aiLoading ? 0.6 : 1,
+                      cursor: aiLoading ? "not-allowed" : "pointer"
+                    }}
+                  >
+                    {aiLoading ? "Gerando..." : "Gerar cards com IA"}
+                  </button>
+                )}
+
                 {!isEditingOpenedNote ? (
                   <button
                     onClick={() => setIsEditingOpenedNote(true)}
@@ -3869,6 +3868,21 @@ export default function App() {
                   </>
                 )}
               </div>
+              {aiError && !isEditingOpenedNote && (
+                <div
+                  style={{
+                    marginTop: 10,
+                    padding: 12,
+                    borderRadius: 12,
+                    background: "rgba(255, 80, 80, 0.10)",
+                    border: "1px solid rgba(255, 80, 80, 0.25)",
+                    fontSize: 13,
+                    lineHeight: 1.5
+                  }}
+                >
+                  {aiError}
+                </div>
+              )}
             </div>
 
             <div
@@ -4746,6 +4760,24 @@ export default function App() {
             className="hide-scrollbar"
           >
             <h3 style={{ marginTop: 0 }}>⚙️ {t("settings")}</h3>
+
+            <div
+              style={{
+                marginTop: 10,
+                marginBottom: 16,
+                padding: 12,
+                borderRadius: 12,
+                background: dark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+                border: dark
+                  ? "1px solid rgba(255,255,255,0.10)"
+                  : "1px solid rgba(0,0,0,0.08)",
+                fontSize: 14,
+                fontWeight: 700,
+                opacity: 0.9
+              }}
+            >
+              Versão {APP_VERSION}
+            </div>
 
             <div
               style={{
