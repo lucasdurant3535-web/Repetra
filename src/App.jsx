@@ -2926,8 +2926,8 @@ ${noteContent}
 
                 const { text, lang } = getSpeakData(card, side);
 
-                if (shouldSpeak(lang)) {
-                  speakWithAI(text);
+                if (shouldSpeak(lang, text)) {
+                  speakWithAI(text, lang);
                 }
               }}
               style={{
