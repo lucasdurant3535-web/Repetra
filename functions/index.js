@@ -28,6 +28,7 @@ exports.generateCardsWithAI = onCall(
       const openai = new OpenAI({ apiKey });
 
       const theme = (request.data?.theme || "").trim();
+      const topic = (request.data?.topic || "").trim();
       const amount = Number(request.data?.amount || 10);
       const language = (request.data?.language || "pt-BR").trim();
       const level = (request.data?.level || "iniciante").trim();
@@ -53,7 +54,7 @@ Sua tarefa é gerar ${amount} flashcards sobre o tema:
 "${theme}"
 
 Contexto da geração:
-- Idioma de resposta: ${language}
+- Idioma alvo da frente: ${language}
 - Nível: ${level}
 
 Objetivo:
@@ -64,21 +65,27 @@ Regras obrigatórias:
 2. Não escreva explicações fora do JSON.
 3. O título deve ser curto, natural e específico.
 4. A descrição deve explicar em 1 frase o foco do deck.
-5. Cada card deve ter apenas:
+5. Cada card deve ter exatamente estes campos:
    - front
    - back
+   - frontLang
+   - backLang
 6. Os cards devem ser claros, objetivos e bons para revisão.
 7. Evite repetições, variações inúteis e conteúdo genérico.
 8. Mantenha consistência total com o tema pedido pelo usuário.
-8.1. O campo front deve sempre representar o estímulo principal de estudo, e o campo back deve sempre representar a resposta ou tradução correspondente.
+8.1. O campo front deve sempre representar o estímulo principal de estudo, e o campo back deve sempre representar a resposta correspondente.
+
 9. Se o tema for idioma:
    - Cada carta deve conter exatamente dois lados
    - Se for um deck de tradução:
      - front = frase no idioma alvo
      - back = tradução em português do Brasil
+     - frontLang = "${language}"
+     - backLang = "pt-BR"
      - nunca inverta essa ordem
    - Se for um deck no mesmo idioma:
      - front e back devem permanecer no mesmo idioma
+     - frontLang e backLang devem refletir corretamente esse idioma
      - o back deve complementar, explicar ou responder o front sem traduzir para português
    - Nunca misture idiomas no mesmo campo
    - Use apenas um idioma por campo
@@ -87,11 +94,31 @@ Regras obrigatórias:
    - Mantenha consistência em todo o deck
    - Prefira frases usadas na vida real
    - Evite frases artificiais ou traduções literais demais
+
 10. Se o tema for estudo teórico:
    - priorize pergunta e resposta objetivas
    - foque nos conceitos mais importantes
+   - frontLang e backLang devem refletir corretamente o idioma usado em cada lado
+
 11. Organize mentalmente as cartas do mais básico para o mais útil, quando fizer sentido.
+
 12. Não invente contexto fora do tema pedido.
+
+13. Use apenas estes códigos de idioma quando aplicável:
+   - pt-BR
+   - en-US
+   - es-ES
+   - fr-FR
+   - de-DE
+   - it-IT
+   - zh-CN
+   - ko-KR
+   - ja-JP
+   - ar-SA
+
+14. Nunca omita frontLang ou backLang.
+
+15. Nunca retorne markdown, comentários ou texto fora do JSON.
 
 Formato obrigatório:
 {
@@ -100,7 +127,9 @@ Formato obrigatório:
   "cards": [
     {
       "front": "string",
-      "back": "string"
+      "back": "string",
+      "frontLang": "string",
+      "backLang": "string"
     }
   ]
 }
@@ -150,21 +179,71 @@ Formato obrigatório:
       function detectLangSimple(text) {
         if (!text || typeof text !== "string") return "unknown";
 
-        const normalized = text.toLowerCase();
+        const normalized = text.toLowerCase().trim();
 
-        if (/[ãõçâêôáéíóúà]/i.test(normalized)) return "pt-BR";
-        if (/[ñ¿¡]/i.test(normalized)) return "es-ES";
-        if (/[äöüß]/i.test(normalized)) return "de-DE";
+        // Espanhol
+        if (
+          /[¿¡ñ]/i.test(normalized) ||
+          /\b(el|la|los|las|un|una|del|al|cómo|dónde|cuándo|por qué|gracias|hola|quiero|puedo|ustedes|nosotros)\b/i.test(normalized)
+        ) {
+          return "es-ES";
+        }
 
-        return "en-US";
+        // Português
+        if (
+          /[ãõç]/i.test(normalized) ||
+          /\b(o|a|os|as|um|uma|do|da|dos|das|você|vocês|não|obrigado|olá|quero|posso)\b/i.test(normalized)
+        ) {
+          return "pt-BR";
+        }
+
+        // Francês
+        if (
+          /\b(le|la|les|un|une|des|avec|bonjour|merci|comment|pourquoi|je|vous)\b/i.test(normalized)
+        ) {
+          return "fr-FR";
+        }
+
+        // Alemão
+        if (
+          /[äöüß]/i.test(normalized) ||
+          /\b(der|die|das|und|mit|ich|nicht|danke)\b/i.test(normalized)
+        ) {
+          return "de-DE";
+        }
+
+        // Inglês
+        if (
+          /\b(the|and|with|from|through|about|how|what|when|where|why|i|you|we|they|keep|clear|changes)\b/i.test(normalized)
+        ) {
+          return "en-US";
+        }
+
+        return "unknown";
+      }
+
+      function normalizeReturnedLang(lang, fallback = "unknown") {
+        const value = String(lang || "").trim().toLowerCase();
+
+        if (!value) return fallback;
+
+        if (value === "pt" || value === "pt-br" || value === "pt-pt") return "pt-BR";
+        if (value === "en" || value === "en-us" || value === "en-gb") return "en-US";
+        if (value === "es" || value === "es-es" || value === "es-mx") return "es-ES";
+        if (value === "fr" || value === "fr-fr") return "fr-FR";
+        if (value === "de" || value === "de-de") return "de-DE";
+
+        return lang;
       }
 
       const parsedWithLang = {
         ...parsed,
+        language,
+        topic,
         cards: parsed.cards.map((card) => ({
           ...card,
-          frontLang: detectLangSimple(card.front),
-          backLang: detectLangSimple(card.back),
+          frontLang: language,
+          backLang: "pt-BR",
         })),
       };
 

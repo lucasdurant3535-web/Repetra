@@ -17,6 +17,8 @@ import { generateCardsWithAI } from "./services/ai";
 import { httpsCallable } from "firebase/functions";
 import { functions } from "./firebase"; // ou onde você inicializa
 
+import { sendPasswordResetEmail } from "firebase/auth";
+
 console.log("Auth:", auth);
 console.log("Firestore:", db);
 
@@ -139,6 +141,8 @@ export default function App() {
   const [editedOpenedNoteContent, setEditedOpenedNoteContent] = useState("");
   const [editedOpenedNoteTitle, setEditedOpenedNoteTitle] = useState("");
   const [editedOpenedNoteTopic, setEditedOpenedNoteTopic] = useState("");
+  const [aiTopic, setAiTopic] = useState("");
+  const [aiLanguage, setAiLanguage] = useState("es-ES");
 
 
   const subscription = userData?.subscription || {};
@@ -204,15 +208,15 @@ export default function App() {
   const tabsDragStartXRef = useRef(0);
   const tabsScrollLeftRef = useRef(0);
 
+  const currentAudioRef = useRef(null);
+  const audioCacheRef = useRef({});
+
   const studyDecks = userDecks;
   const studyActiveDeck = studyDecks.find(
     deck => String(deck.id) === String(activeDeckId)
   ) || null;
 
   const aiLimitReached = aiUsageInfo?.remaining === 0;
-
-  const audioCacheRef = useRef({});
-  const currentAudioRef = useRef(null);
 
   const dueByTopic = getDueCardsByTopic();
 
@@ -596,6 +600,16 @@ export default function App() {
         return;
       }
 
+      if (!aiTheme.trim()) {
+        setAiError("Digite o tema principal.");
+        return;
+      }
+
+      if (!aiTopic.trim()) {
+        setAiError("Digite o tópico do deck.");
+        return;
+      }
+
       const userRef = doc(db, "users", user.uid);
       const snap = await getDoc(userRef);
       const userData = snap.data();
@@ -611,15 +625,26 @@ export default function App() {
       const requestedAmount = Number(aiAmount) || 10;
       const safeAmount = Math.min(requestedAmount, check.maxCards);
 
+      const languageLabel = getLanguageLabel(aiLanguage);
+
+      const finalTheme = `${languageLabel} para ${aiTopic}: ${aiTheme}`;
+
       const res = await generateCardsWithAI({
-        theme: aiTheme,
+        theme: finalTheme,
+        topic: aiTopic,
         amount: safeAmount,
-        language: "pt-BR",
+        language: aiLanguage,
         level: "iniciante",
       });
 
       if (res?.ok) {
-        setAiPreview(res.content);
+        setAiPreview({
+          ...res.content,
+          language: aiLanguage,
+          topic: aiTopic,
+          originalTheme: aiTheme,
+        });
+
         await incrementAIUsage(user);
         await loadAIUsage();
       } else {
@@ -633,26 +658,58 @@ export default function App() {
     }
   }
 
-  function normalizeCardLang(text, aiLang, fallbackLang) {
-    if (!text) return fallbackLang || "unknown";
+  function normalizeCardLang(text, aiLang, fallbackLang = "unknown") {
+    if (!text) return fallbackLang;
 
-    const normalizedAiLang = (aiLang || "").trim();
+    const normalizedAiLang = String(aiLang || "").trim();
 
-    // se a IA marcou português, aceita
-    if (normalizedAiLang === "pt-BR") return "pt-BR";
+    if (normalizedAiLang) {
+      const lower = normalizedAiLang.toLowerCase();
 
-    // heurística simples para português
-    const looksPortuguese =
-      /[ãõçáàâéêíóôõú]/i.test(text) ||
-      /\b(o|a|os|as|um|uma|de|da|do|das|dos|que|como|para|com|não|por|em)\b/i.test(text);
+      if (lower === "pt" || lower === "pt-br" || lower === "pt-pt") {
+        return "pt-BR";
+      }
 
-    if (looksPortuguese) return "pt-BR";
+      if (lower === "es" || lower === "es-es" || lower === "es-mx") {
+        return "es-ES";
+      }
 
-    // se a IA mandou algum idioma e o texto não parece português, aceita
-    if (normalizedAiLang) return normalizedAiLang;
+      if (lower === "en" || lower === "en-us" || lower === "en-gb") {
+        return "en-US";
+      }
 
-    // fallback final
-    return fallbackLang || "unknown";
+      return normalizedAiLang;
+    }
+
+    const normalizedText = String(text).toLowerCase().trim();
+
+    if (
+      /[¿¡ñ]/i.test(normalizedText) ||
+      /\b(el|la|los|las|un|una|de|del|cómo|dónde|cuándo|por qué|para|con|sin|yo|tú|usted|ustedes)\b/i.test(normalizedText)
+    ) {
+      return "es-ES";
+    }
+
+    if (
+      /[ãõç]/i.test(normalizedText) ||
+      /\b(o|a|os|as|um|uma|de|do|da|dos|das|como|onde|quando|por que|para|com|sem|eu|você|vocês|não)\b/i.test(normalizedText)
+    ) {
+      return "pt-BR";
+    }
+
+    return fallbackLang;
+  }
+
+  function normalizeDeckLanguage(language) {
+    const value = String(language || "").trim().toLowerCase();
+
+    if (value === "pt" || value === "pt-br" || value === "pt-pt") return "pt-BR";
+    if (value === "en" || value === "en-us" || value === "en-gb" || value.includes("ingl")) return "en-US";
+    if (value === "es" || value === "es-es" || value === "es-mx" || value.includes("espan")) return "es-ES";
+    if (value === "fr" || value === "fr-fr" || value.includes("franc")) return "fr-FR";
+    if (value === "de" || value === "de-de" || value.includes("alem")) return "de-DE";
+
+    return "unknown";
   }
 
   async function handleSaveAIDeck() {
@@ -675,42 +732,40 @@ export default function App() {
 
       const nowIso = new Date().toISOString();
 
+      const deckFrontLang = aiPreview.language || aiLanguage || "unknown";
+      const deckBackLang = "pt-BR";
+
       const localDeck = {
         id: newDeckRef.id,
         name: aiPreview.title || "Novo deck com IA",
         description:
           aiPreview.description || "Deck gerado por inteligência artificial.",
+        topic: aiPreview.topic || aiTopic || "Geral",
         level: "iniciante",
         isBuiltIn: false,
         sourcePresetId: null,
         userId: user.uid,
         createdAt: nowIso,
         updatedAt: nowIso,
-        cards: (aiPreview.cards || []).map((card, index) => ({
-          id: `${newDeckRef.id}-card-${index + 1}`,
-          question: card.front,
-          answer: card.back,
+        cards: (aiPreview.cards || []).map((card, index) => {
+          const frontText = card?.front || "";
+          const backText = card?.back || "";
 
-          questionLang: normalizeCardLang(
-            card.front,
-            card.frontLang,
-            "pt-BR"
-          ),
-
-          answerLang: normalizeCardLang(
-            card.back,
-            card.backLang,
-            "pt-BR"
-          ),
-
-          repetition: 0,
-          interval: 0,
-          ease: 2.5,
-          stability: 1,
-          nextReview: nowIso,
-          lastReview: nowIso,
-          reviewHistory: [],
-        })),
+          return {
+            id: `${newDeckRef.id}-card-${index + 1}`,
+            question: frontText,
+            answer: backText,
+            questionLang: deckFrontLang,
+            answerLang: deckBackLang,
+            repetition: 0,
+            interval: 0,
+            ease: 2.5,
+            stability: 1,
+            nextReview: nowIso,
+            lastReview: nowIso,
+            reviewHistory: [],
+          };
+        }),
       };
 
       const firestoreDeck = {
@@ -730,6 +785,8 @@ export default function App() {
       setAiPreview(null);
       setAiOpen(false);
       setAiTheme("");
+      setAiTopic("");
+      setAiLanguage("es-ES");
       setAiAmount(10);
       setAiError("");
     } catch (err) {
@@ -838,115 +895,13 @@ export default function App() {
     });
   }
 
-  async function speakWithAI(text, lang) {
-    try {
-      if (!text || !lang) return;
-      if (lang === "pt-BR") return;
 
-      const cacheKey = `${lang}::${text}`;
 
-      // para áudio anterior
-      if (currentAudioRef.current) {
-        currentAudioRef.current.pause();
-        currentAudioRef.current.currentTime = 0;
-      }
 
-      // ✅ usa cache se já existir
-      if (audioCacheRef.current[cacheKey]) {
-        const cachedAudio = new Audio(audioCacheRef.current[cacheKey]);
-        currentAudioRef.current = cachedAudio;
-        await cachedAudio.play();
-        return;
-      }
 
-      const generateSpeech = httpsCallable(functions, "generateSpeech");
-      const res = await generateSpeech({ text, lang });
 
-      const base64 = res.data.audioBase64;
-      const audioSrc = `data:audio/mp3;base64,${base64}`;
 
-      // salva no cache
-      audioCacheRef.current[cacheKey] = audioSrc;
 
-      const audio = new Audio(audioSrc);
-      currentAudioRef.current = audio;
-      await audio.play();
-    } catch (err) {
-      console.error("Erro ao tocar áudio com IA:", err);
-    }
-  }
-
-  function normalizeAICard(card, index, deckId, nowIso) {
-    const frontText = card?.front || "";
-    const backText = card?.back || "";
-
-    const frontLang = normalizeCardLang(frontText, card?.frontLang, "pt-BR");
-    const backLang = normalizeCardLang(backText, card?.backLang, "pt-BR");
-
-    return {
-      id: `${deckId}-card-${index + 1}`,
-      question: frontText,
-      answer: backText,
-      questionLang: frontLang,
-      answerLang: backLang,
-      repetition: 0,
-      interval: 0,
-      ease: 2.5,
-      stability: 1,
-      nextReview: nowIso,
-      lastReview: nowIso,
-      reviewHistory: [],
-    };
-  }
-
-  function canSpeakCardSide(card, side) {
-    const questionLang = card?.questionLang || "";
-    const answerLang = card?.answerLang || "";
-
-    const isTranslationToPortuguese =
-      answerLang === "pt-BR" && questionLang && questionLang !== "pt-BR";
-
-    const isSameLanguage =
-      questionLang &&
-      answerLang &&
-      questionLang === answerLang;
-
-    if (isTranslationToPortuguese) {
-      return side === "front";
-    }
-
-    if (isSameLanguage) {
-      return true;
-    }
-
-    return false;
-  }
-
-  function getSpeakData(card, side) {
-    if (side === "front") {
-      return {
-        text: card?.question || "",
-        lang: card?.questionLang || "",
-      };
-    }
-
-    return {
-      text: card?.answer || "",
-      lang: card?.answerLang || "",
-    };
-  }
-
-  function shouldSpeak(lang, text = "") {
-    if (!lang || lang === "pt-BR") return false;
-
-    const looksPortuguese =
-      /[ãõçáàâéêíóôõú]/i.test(text) ||
-      /\b(o|a|os|as|um|uma|de|da|do|das|dos|que|como|para|com|não|por|em)\b/i.test(text);
-
-    if (looksPortuguese) return false;
-
-    return true;
-  }
 
   async function handleGenerateCardsFromOpenedNote() {
     try {
@@ -1356,6 +1311,133 @@ ${noteContent}
       setIsEditingOpenedNote(false);
     } catch (error) {
       console.error("Erro ao salvar nota aberta:", error);
+    }
+  }
+
+  async function speakWithAI(text, lang) {
+    try {
+      const cleanText = String(text || "").trim();
+      const cleanLang = String(lang || "").trim().toLowerCase();
+
+      console.log("speakWithAI:", {
+        cleanText,
+        cleanLang
+      });
+
+      if (!cleanText) {
+        console.log("Áudio cancelado: sem texto");
+        return;
+      }
+
+      if (!cleanLang) {
+        console.log("Áudio cancelado: sem idioma");
+        return;
+      }
+
+      if (cleanLang.startsWith("pt")) {
+        console.log("Áudio cancelado: idioma português");
+        return;
+      }
+
+      const cacheKey = `${cleanLang}::${cleanText}`;
+
+      // para áudio anterior
+      if (currentAudioRef.current) {
+        currentAudioRef.current.pause();
+        currentAudioRef.current.currentTime = 0;
+      }
+
+      // usa cache se já existir
+      if (audioCacheRef.current[cacheKey]) {
+        console.log("Tocando áudio do cache");
+        const cachedAudio = new Audio(audioCacheRef.current[cacheKey]);
+        currentAudioRef.current = cachedAudio;
+        await cachedAudio.play();
+        return;
+      }
+
+      console.log("Chamando generateSpeech...");
+
+      const generateSpeech = httpsCallable(functions, "generateSpeech");
+      const res = await generateSpeech({
+        text: cleanText,
+        lang: cleanLang,
+      });
+
+      console.log("Resposta generateSpeech:", res);
+
+      const base64 = res?.data?.audioBase64;
+
+      if (!base64) {
+        console.error("generateSpeech não retornou audioBase64");
+        return;
+      }
+
+      const audioSrc = `data:audio/mp3;base64,${base64}`;
+
+      // salva no cache
+      audioCacheRef.current[cacheKey] = audioSrc;
+
+      const audio = new Audio(audioSrc);
+      currentAudioRef.current = audio;
+
+      await audio.play();
+      console.log("Áudio tocado com sucesso");
+    } catch (err) {
+      console.error("Erro ao tocar áudio com IA:", err);
+    }
+  }
+
+  function getLanguageLabel(lang) {
+    switch (lang) {
+      case "en-US":
+        return "Inglês";
+      case "es-ES":
+        return "Espanhol";
+      case "fr-FR":
+        return "Francês";
+      case "de-DE":
+        return "Alemão";
+      case "it-IT":
+        return "Italiano";
+      case "zh-CN":
+        return "Mandarim";
+      case "ko-KR":
+        return "Coreano";
+      case "ja-JP":
+        return "Japonês";
+      case "ar-SA":
+        return "Árabe";
+      case "pt-BR":
+        return "Português";
+      default:
+        return "Idioma";
+    }
+  }
+
+  async function handleForgotPassword() {
+    if (!email) {
+      showToast("Digite seu e-mail acima para recuperar a senha.", "error");
+
+      // 👇 foca no input automaticamente
+      document.getElementById("emailInput")?.focus();
+
+      return;
+    }
+
+    try {
+      await sendPasswordResetEmail(auth, email);
+      showToast("📩 Email de recuperação enviado!");
+    } catch (error) {
+      console.error(error);
+
+      if (error.code === "auth/user-not-found") {
+        showToast("Nenhum usuário encontrado com esse e-mail.", "error");
+      } else if (error.code === "auth/invalid-email") {
+        showToast("E-mail inválido.", "error");
+      } else {
+        showToast("Erro ao enviar email. Tente novamente.", "error");
+      }
     }
   }
 
@@ -2702,6 +2784,7 @@ ${noteContent}
           </p>
 
           <input
+            id="emailInput" // 👈 adiciona isso aqui
             value={email}
             onChange={e => setEmail(e.target.value)}
             placeholder="Email"
@@ -2715,6 +2798,20 @@ ${noteContent}
             placeholder="Senha"
             style={inputStyle}
           />
+
+          <p
+            onClick={handleForgotPassword}
+            style={{
+              marginTop: 10,
+              fontSize: 13,
+              textAlign: "center",
+              cursor: "pointer",
+              opacity: 0.7,
+              textDecoration: "underline"
+            }}
+          >
+            Esqueci minha senha
+          </p>
 
           <button
             onClick={authMode === "login" ? handleLogin : handleRegister}
@@ -2904,6 +3001,52 @@ ${noteContent}
               </div>
             </div>
 
+            {/* 🔊 BOTÃO DE ÁUDIO */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation(); // 🔥 MUITO IMPORTANTE
+
+                const card = session[index];
+                const side = showBack ? "back" : "front";
+
+                const text =
+                  side === "front"
+                    ? String(card?.question || "").trim()
+                    : String(card?.answer || "").trim();
+
+                const lang =
+                  side === "front"
+                    ? String(card?.questionLang || "").trim()
+                    : String(card?.answerLang || "").trim();
+
+                console.log("Clique no áudio:", {
+                  side,
+                  text,
+                  lang,
+                  card
+                });
+
+                if (!text) return;
+                if (!lang) return;
+                if (lang.toLowerCase().startsWith("pt")) return;
+
+                speakWithAI(text, lang);
+              }}
+              style={{
+                marginTop: 12,
+                border: "none",
+                background: "transparent",
+                color: dark ? "#fff" : "#111",
+                fontSize: 26,
+                cursor: "pointer",
+                display: "block",
+                marginLeft: "auto",
+                marginRight: "auto"
+              }}
+            >
+              🔊
+            </button>
+
             <p
               style={{
                 marginTop: 12,
@@ -2915,36 +3058,6 @@ ${noteContent}
             >
               Toque na carta para virar
             </p>
-            <button
-              onClick={() => {
-                const card = session[index];
-                const side = showBack ? "back" : "front";
-
-                if (!canSpeakCardSide(card, side)) {
-                  return;
-                }
-
-                const { text, lang } = getSpeakData(card, side);
-
-                if (shouldSpeak(lang, text)) {
-                  speakWithAI(text, lang);
-                }
-              }}
-              style={{
-                marginTop: 12,
-                border: "none",
-                background: "transparent",
-                color: dark ? "#fff" : "#111",
-                fontSize: 20,
-                cursor: "pointer",
-                opacity: 0.85,
-                display: "block",
-                marginLeft: "auto",
-                marginRight: "auto"
-              }}
-            >
-              🔊
-            </button>
           </div>
 
           {showBack && (
@@ -5302,6 +5415,49 @@ ${noteContent}
                   color: dark ? "#fff" : "#111",
                   outline: "none",
                   fontSize: 15,
+                }}
+              />
+
+              <select
+                value={aiLanguage}
+                onChange={(e) => setAiLanguage(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "14px 16px",
+                  borderRadius: 16,
+                  border: dark ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.08)",
+                  background: dark ? "#1c1c1f" : "#fff",
+                  color: dark ? "#fff" : "#111",
+                  fontSize: 16,
+                  marginBottom: 12,
+                  outline: "none"
+                }}
+              >
+                <option value="en-US">Inglês</option>
+                <option value="es-ES">Espanhol</option>
+                <option value="fr-FR">Francês</option>
+                <option value="de-DE">Alemão</option>
+                <option value="it-IT">Italiano</option>
+                <option value="zh-CN">Mandarim</option>
+                <option value="ko-KR">Coreano</option>
+                <option value="ja-JP">Japonês</option>
+                <option value="ar-SA">Árabe</option>
+              </select>
+
+              <input
+                value={aiTopic}
+                onChange={(e) => setAiTopic(e.target.value)}
+                placeholder="Tópico (ex.: entrevistas, viagens, restaurante)"
+                style={{
+                  width: "100%",
+                  padding: "14px 16px",
+                  borderRadius: 16,
+                  border: dark ? "1px solid rgba(255,255,255,0.08)" : "1px solid rgba(0,0,0,0.08)",
+                  background: dark ? "#1c1c1f" : "#fff",
+                  color: dark ? "#fff" : "#111",
+                  fontSize: 16,
+                  marginBottom: 12,
+                  outline: "none"
                 }}
               />
 
