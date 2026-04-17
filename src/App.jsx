@@ -1390,6 +1390,8 @@ ${noteContent}
 
   function getLanguageLabel(lang) {
     switch (lang) {
+      case "pt-BR":
+        return "Português";
       case "en-US":
         return "Inglês";
       case "es-ES":
@@ -1408,8 +1410,6 @@ ${noteContent}
         return "Japonês";
       case "ar-SA":
         return "Árabe";
-      case "pt-BR":
-        return "Português";
       default:
         return "Idioma";
     }
@@ -1439,6 +1439,71 @@ ${noteContent}
         showToast("Erro ao enviar email. Tente novamente.", "error");
       }
     }
+  }
+
+  function InfoTooltip({ text }) {
+    const [show, setShow] = React.useState(false);
+
+    function toggleTooltip(e) {
+      e.stopPropagation();
+      setShow((prev) => !prev);
+    }
+
+    return (
+      <span
+        style={{
+          position: "relative",
+          display: "inline-block",
+          marginLeft: 6,
+          cursor: "pointer"
+        }}
+        onMouseEnter={() => setShow(true)}
+        onMouseLeave={() => setShow(false)}
+        onClick={toggleTooltip}
+      >
+        <span
+          style={{
+            width: 16,
+            height: 16,
+            borderRadius: "50%",
+            background: "linear-gradient(135deg, #7C5CFF, #5A8BFF)",
+            color: "#fff",
+            fontSize: 11,
+            fontWeight: 700,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            userSelect: "none"
+          }}
+        >
+          i
+        </span>
+
+        {show && (
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              position: "absolute",
+              bottom: "125%",
+              left: "50%",
+              transform: "translateX(-50%)",
+              background: "#121212",
+              color: "#fff",
+              padding: "10px 12px",
+              borderRadius: 10,
+              fontSize: 12,
+              width: 220,
+              textAlign: "center",
+              boxShadow: "0 10px 30px rgba(0,0,0,0.4)",
+              zIndex: 999,
+              lineHeight: 1.4
+            }}
+          >
+            {text}
+          </div>
+        )}
+      </span>
+    );
   }
 
   useEffect(() => {
@@ -2771,7 +2836,7 @@ ${noteContent}
             style={{
               margin: 0,
               fontSize: 28,
-              fontWeight: 800,
+              fontWeight: 700,
               fontFamily: "Sora, sans-serif",
               letterSpacing: -0.5
             }}
@@ -2779,7 +2844,7 @@ ${noteContent}
             Repetra
           </h1>
 
-          <p style={{ fontSize: 14, opacity: 0.75, marginTop: 10, marginBottom: 24 }}>
+          <p style={{ fontSize: 14, opacity: 10, marginTop: 10, marginBottom: 24 }}>
             O sistema de memória que se adapta ao seu cérebro em tempo real.
           </p>
 
@@ -2806,7 +2871,7 @@ ${noteContent}
               fontSize: 13,
               textAlign: "center",
               cursor: "pointer",
-              opacity: 0.7,
+              color: dark ? "rgba(255,255,255,0.85)" : "#333",
               textDecoration: "underline"
             }}
           >
@@ -2847,7 +2912,7 @@ ${noteContent}
               marginTop: 14,
               fontSize: 14,
               textAlign: "center",
-              opacity: 0.8,
+              color: dark ? "rgba(255,255,255,0.85)" : "#333",
               cursor: "pointer"
             }}
           >
@@ -4351,9 +4416,27 @@ ${noteContent}
               <p>
                 🏆 {t("level")}: <strong>{getCognitiveLevel(averageStability)}</strong>
               </p>
-              <p>🧠 {t("averageStability")}: {averageStability.toFixed(2)}</p>
-              <p>📊 {t("averageRetention")}: {(averageRetention * 100).toFixed(1)}%</p>
-              <p>⚡ {t("averageResponseTime")}: {averageResponseTime.toFixed(2)}s</p>
+
+              <p>
+                🧠 {t("averageStability")}:
+                <InfoTooltip text="Indica por quanto tempo você consegue lembrar uma carta sem esquecer. Quanto maior, mais consolidado está o conhecimento." />
+                {" "}
+                {averageStability.toFixed(2)}
+              </p>
+
+              <p>
+                📊 {t("averageRetention")}:
+                <InfoTooltip text="Percentual de acertos nas revisões. Quanto maior, melhor sua memória das cartas." />
+                {" "}
+                {(averageRetention * 100).toFixed(1)}%
+              </p>
+
+              <p>
+                ⚡ {t("averageResponseTime")}:
+                <InfoTooltip text="Tempo que você leva para responder uma carta. Respostas rápidas indicam maior domínio do conteúdo." />
+                {" "}
+                {averageResponseTime.toFixed(2)}s
+              </p>
 
               <hr
                 style={{
@@ -4882,6 +4965,73 @@ ${noteContent}
                   Versão {APP_VERSION}
                 </div>
               </div>
+            </div>
+
+            <div
+              style={{
+                marginTop: 18,
+                padding: 16,
+                borderRadius: 20,
+                background: dark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.04)",
+                border: dark
+                  ? "1px solid rgba(255,255,255,0.06)"
+                  : "1px solid rgba(0,0,0,0.06)",
+                boxShadow: dark
+                  ? "0 10px 30px rgba(0,0,0,0.3)"
+                  : "0 10px 30px rgba(0,0,0,0.08)"
+              }}
+            >
+              {/* Título */}
+              <div
+                style={{
+                  fontSize: 14,
+                  fontWeight: 700,
+                  marginBottom: 6,
+                  color: dark ? "#fff" : "#111"
+                }}
+              >
+                🌗 Tema
+              </div>
+
+              {/* Descrição */}
+              <div
+                style={{
+                  fontSize: 13,
+                  opacity: 0.7,
+                  marginBottom: 12
+                }}
+              >
+                Escolha entre modo claro ou escuro.
+              </div>
+
+              {/* Botão */}
+              <button
+                onClick={() => setDark(!dark)}
+                style={{
+                  width: "100%",
+                  padding: "14px 16px",
+                  borderRadius: 16,
+                  border: dark
+                    ? "1px solid rgba(255,255,255,0.08)"
+                    : "1px solid rgba(0,0,0,0.08)",
+                  background: dark
+                    ? "linear-gradient(135deg, #1f1f23, #121212)"
+                    : "linear-gradient(135deg, #ffffff, #f3f4f6)",
+                  color: dark ? "#fff" : "#111",
+                  fontSize: 15,
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between"
+                }}
+              >
+                <span>{dark ? "🌙 Modo escuro" : "☀️ Modo claro"}</span>
+
+                <span style={{ opacity: 0.7, fontWeight: 500 }}>
+                  {dark ? "Toque para clarear" : "Toque para escurecer"}
+                </span>
+              </button>
             </div>
 
             <div
@@ -5433,6 +5583,7 @@ ${noteContent}
                   outline: "none"
                 }}
               >
+                <option value="pt-BR">Português</option>
                 <option value="en-US">Inglês</option>
                 <option value="es-ES">Espanhol</option>
                 <option value="fr-FR">Francês</option>

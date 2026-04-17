@@ -243,7 +243,7 @@ Formato obrigatório:
         cards: parsed.cards.map((card) => ({
           ...card,
           frontLang: language,
-          backLang: "pt-BR",
+          backLang: language === "pt-BR" ? "pt-BR" : "pt-BR",
         })),
       };
 
