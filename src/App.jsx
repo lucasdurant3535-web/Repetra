@@ -4979,7 +4979,11 @@ ${noteContent}
               width: "85%",
               maxWidth: 360,
               background: dark ? "#17172A" : "#fff",
+
               padding: 20,
+              paddingTop: "calc(env(safe-area-inset-top) + 20px)",
+              paddingBottom: "calc(env(safe-area-inset-bottom) + 20px)",
+
               borderRight: dark
                 ? "1px solid rgba(255,255,255,0.08)"
                 : "1px solid rgba(0,0,0,0.06)",
