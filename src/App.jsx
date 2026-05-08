@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from "react";
 import { presetDecks } from "./data/presetDecks"
 import { auth, db } from "./firebase";
-import { collection, doc, setDoc, getDoc, getDocs, updateDoc, serverTimestamp } from "firebase/firestore";
+import { collection, doc, setDoc, getDoc, getDocs, updateDoc, serverTimestamp, onSnapshot } from "firebase/firestore";
 import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
@@ -21,9 +21,20 @@ import { functions } from "./firebase"; // ou onde você inicializa
 console.log("Auth:", auth);
 console.log("Firestore:", db);
 
-function getDue(cards) {
-  const now = new Date();
-  return cards.filter(c => new Date(c.nextReview) <= now);
+function getDue(cards = []) {
+  const now = Date.now();
+
+  return cards.filter((card) => {
+    // cartas sem nextReview devem aparecer para estudo
+    if (!card?.nextReview) return true;
+
+    const nextReviewTime = new Date(card.nextReview).getTime();
+
+    // se a data estiver inválida, também libera para estudo
+    if (Number.isNaN(nextReviewTime)) return true;
+
+    return nextReviewTime <= now;
+  });
 }
 
 function daysBetween(dateString) {
@@ -142,6 +153,10 @@ export default function App() {
   const [editedOpenedNoteTopic, setEditedOpenedNoteTopic] = useState("");
   const [aiTopic, setAiTopic] = useState("");
   const [aiLanguage, setAiLanguage] = useState("es-ES");
+  const [deckLanguage, setDeckLanguage] = useState("es-ES");
+  const [editingDeck, setEditingDeck] = useState(false);
+  const [editDeckName, setEditDeckName] = useState("");
+  const [editDeckTopic, setEditDeckTopic] = useState("");
 
 
   const subscription = userData?.subscription || {};
@@ -1041,16 +1056,30 @@ ${noteContent}
   }
 
   function startTopicSession(topicGroup) {
-    if (!topicGroup?.cards?.length) return;
+    try {
+      const topicCards = Array.isArray(topicGroup?.cards) ? topicGroup.cards : [];
 
-    setStudyMode("topic");
-    setStudyTopic(topicGroup.topic);
-    setSession(topicGroup.cards);
-    setIndex(0);
-    setShowBack(false);
-    setStudyStarted(true);
-    setTab("study");
-    setStartTime(Date.now());
+      if (topicCards.length === 0) {
+        showToast("Esse tópico não tem cartas disponíveis.", "error");
+        return;
+      }
+
+      const dueCards = getDue(topicCards);
+
+      const cardsToStudy = dueCards.length > 0 ? dueCards : topicCards;
+
+      setStudyMode("topic");
+      setStudyTopic(topicGroup.topic);
+      setSession(cardsToStudy);
+      setIndex(0);
+      setShowBack(false);
+      setStudyStarted(true);
+      setTab("study");
+      setStartTime(Date.now());
+    } catch (err) {
+      console.error("Erro ao iniciar sessão por tópico:", err);
+      showToast("Não foi possível iniciar esse tópico.", "error");
+    }
   }
 
   async function updateSingleCardInDeck(deckId, updatedCard) {
@@ -1095,24 +1124,36 @@ ${noteContent}
   }
 
   function startDeckStudy(selectedDeck) {
-    if (!selectedDeck?.cards?.length) {
-      showToast("Esse deck não tem cartas ainda", "error");
-      return;
+    try {
+      const deckCards = Array.isArray(selectedDeck?.cards) ? selectedDeck.cards : [];
+
+      if (deckCards.length === 0) {
+        showToast("Esse deck não tem cartas ainda.", "error");
+        return;
+      }
+
+      const dueCards = getDue(deckCards);
+
+      const cardsToStudy = dueCards.length > 0 ? dueCards : deckCards;
+
+      if (cardsToStudy.length === 0) {
+        showToast("Nenhuma carta disponível para estudar.", "error");
+        return;
+      }
+
+      setStudyMode("deck");
+      setStudyTopic(null);
+      setSession(cardsToStudy);
+      setIndex(0);
+      setShowBack(false);
+      setStudyStarted(true);
+      setStartTime(Date.now());
+      setActiveDeckId(selectedDeck.id);
+      setTab("study");
+    } catch (err) {
+      console.error("Erro ao iniciar estudo do deck:", err);
+      showToast("Não foi possível iniciar esse deck.", "error");
     }
-
-    const dueCards = getDue(selectedDeck.cards);
-
-    const cardsToStudy = dueCards.length > 0 ? dueCards : selectedDeck.cards;
-
-    setStudyMode("deck");
-    setStudyTopic(null);
-    setSession(cardsToStudy);
-    setIndex(0);
-    setShowBack(false);
-    setStudyStarted(true);
-    setStartTime(Date.now());
-    setActiveDeckId(selectedDeck.id);
-    setTab("study");
   }
 
   async function createNote() {
@@ -1597,29 +1638,30 @@ ${noteContent}
   }, []);
 
   useEffect(() => {
-    async function loadUserDecks() {
-      if (!user) {
-        setDecks([]);
-        return;
-      }
+    if (!user) {
+      setDecks([]);
+      return;
+    }
 
-      try {
-        const snapshot = await getDocs(
-          collection(db, "users", user.uid, "decks")
-        );
+    const decksRef = collection(db, "users", user.uid, "decks");
 
-        const loadedDecks = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
+    const unsubscribe = onSnapshot(
+      decksRef,
+      (snapshot) => {
+        const loadedDecks = snapshot.docs.map((docSnap) => ({
+          id: docSnap.id,
+          ...docSnap.data()
         }));
 
         setDecks(loadedDecks);
-      } catch (error) {
-        console.error("Erro ao carregar decks:", error);
+      },
+      (error) => {
+        console.error("Erro ao sincronizar decks:", error);
+        showToast("Erro ao sincronizar decks", "error");
       }
-    }
+    );
 
-    loadUserDecks();
+    return () => unsubscribe();
   }, [user]);
 
   useEffect(() => {
@@ -1773,6 +1815,39 @@ ${noteContent}
     }
   }
 
+  useEffect(() => {
+    async function loadStudyStats() {
+      if (!user) return;
+
+      try {
+        const userRef = doc(db, "users", user.uid);
+        const snap = await getDoc(userRef);
+
+        if (!snap.exists()) return;
+
+        const data = snap.data();
+
+        // streak
+        if (typeof data.streak === "number") {
+          setStreak(data.streak);
+        }
+
+        // contador diário
+        const todayKey = getDateKey();
+
+        if (data.dailyProgress?.date === todayKey) {
+          setTodayCount(data.dailyProgress.completed || 0);
+        } else {
+          setTodayCount(0);
+        }
+      } catch (err) {
+        console.error("Erro ao carregar stats:", err);
+      }
+    }
+
+    loadStudyStats();
+  }, [user]);
+
   async function completePremiumOnboarding() {
     if (!user) return;
 
@@ -1840,11 +1915,6 @@ ${noteContent}
     const cleanName = newDeck.trim();
     const cleanTopic = deckTopic.trim();
 
-    console.log("CRIANDO DECK:", {
-      newDeck,
-      deckTopic
-    });
-
     if (!cleanName) return;
 
     if (!user) {
@@ -1869,6 +1939,7 @@ ${noteContent}
         id: deckId,
         name: cleanName,
         topic: cleanTopic || "Geral",
+        language: deckLanguage,
         cards: [],
         userId: user.uid,
         createdAt: now,
@@ -1876,14 +1947,12 @@ ${noteContent}
         isBuiltIn: false
       };
 
-      await setDoc(
-        doc(db, "users", user.uid, "decks", deckId),
-        deckData
-      );
+      await setDoc(doc(db, "users", user.uid, "decks", deckId), deckData);
 
       setDecks(prev => [...prev, deckData]);
       setNewDeck("");
       setDeckTopic("");
+      setDeckLanguage("es-ES");
 
       showToast("Deck criado com sucesso", "success");
     } catch (error) {
@@ -2015,6 +2084,48 @@ ${noteContent}
     } catch (error) {
       console.error("Erro ao excluir deck:", error);
       showToast("Erro ao excluir deck");
+    }
+  }
+
+  async function saveDeckEdit() {
+    if (!activeDeck || !user) return;
+
+    const cleanName = editDeckName.trim();
+    const cleanTopic = editDeckTopic.trim();
+
+    if (!cleanName) {
+      showToast("O deck precisa ter um nome", "error");
+      return;
+    }
+
+    try {
+      await updateDoc(
+        doc(db, "users", user.uid, "decks", String(activeDeck.id)),
+        {
+          name: cleanName,
+          topic: cleanTopic || "Geral",
+          updatedAt: new Date().toISOString()
+        }
+      );
+
+      setDecks(prev =>
+        prev.map(deck =>
+          String(deck.id) === String(activeDeck.id)
+            ? {
+              ...deck,
+              name: cleanName,
+              topic: cleanTopic || "Geral"
+            }
+            : deck
+        )
+      );
+
+      setEditingDeck(false);
+
+      showToast("Deck atualizado 🚀", "success");
+    } catch (error) {
+      console.error("Erro ao editar deck:", error);
+      showToast("Erro ao editar deck", "error");
     }
   }
 
@@ -2169,23 +2280,37 @@ ${noteContent}
 
     const now = new Date().toISOString();
 
+    const deckLanguage = activeDeck.language || "es-ES";
+
+    const isPortugueseDeck = deckLanguage.toLowerCase().startsWith("pt");
+
     const newCard = {
       id: Date.now(),
-      question: front,
-      answer: back,
+
+      question: front.trim(),
+      answer: back.trim(),
+
+      // idioma automático
+      questionLang: isPortugueseDeck ? "pt-BR" : deckLanguage,
+      answerLang: isPortugueseDeck ? "en-US" : "pt-BR",
+
       repetition: 0,
       interval: 0,
       ease: 2.5,
+
       nextReview: now,
       lastReview: now,
+
       reviewHistory: [],
       stability: 1
     };
 
-    await updateCards([...activeDeck.cards, newCard]);
+    await updateCards([...(activeDeck.cards || []), newCard]);
 
     setFront("");
     setBack("");
+
+    showToast("Carta adicionada 🚀", "success");
   }
 
   function autoResize(e) {
@@ -2195,21 +2320,40 @@ ${noteContent}
   }
 
   function calculateSM2(card, quality) {
-    let { repetition, interval, ease } = card;
+    let repetition = card.repetition || 0;
+    let interval = card.interval || 1;
+    let ease = card.ease || 2.5;
 
+    // Esqueci
     if (quality < 3) {
       repetition = 0;
       interval = 1;
+      ease = Math.max(1.3, ease - 0.2);
     } else {
       repetition += 1;
 
-      if (repetition === 1) interval = 1;
-      else if (repetition === 2) interval = 6;
-      else interval = Math.round(interval * ease);
-    }
+      // Difícil
+      if (quality === 3) {
+        interval = 1;
+        ease = Math.max(1.3, ease - 0.15);
+      }
 
-    ease = ease + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02));
-    if (ease < 1.3) ease = 1.3;
+      // Bom
+      else if (quality === 4) {
+        if (repetition === 1) interval = 1;
+        else if (repetition === 2) interval = 3;
+        else interval = Math.max(2, Math.round(interval * ease));
+      }
+
+      // Fácil
+      else if (quality === 5) {
+        if (repetition === 1) interval = 3;
+        else if (repetition === 2) interval = 7;
+        else interval = Math.max(4, Math.round(interval * ease * 1.3));
+
+        ease += 0.15;
+      }
+    }
 
     return { repetition, interval, ease };
   }
@@ -2243,19 +2387,41 @@ ${noteContent}
 
 
   function startSession() {
-    if (!activeDeck) return;
+    try {
+      if (!activeDeck) {
+        showToast("Selecione um deck para estudar.", "error");
+        return;
+      }
 
-    const due = getDue(activeDeck.cards);
-    if (due.length === 0) return;
+      const deckCards = Array.isArray(activeDeck.cards) ? activeDeck.cards : [];
 
-    setSession(due);
-    setIndex(0);
-    setShowBack(false);
-    setStartTime(Date.now());
-    setStudyStarted(true);
+      if (deckCards.length === 0) {
+        showToast("Esse deck não tem cartas ainda.", "error");
+        return;
+      }
 
-    // ✅ vai direto para a aba Study
-    setTab("study");
+      const due = getDue(deckCards);
+
+      const cardsToStudy = due.length > 0 ? due : deckCards;
+
+      if (cardsToStudy.length === 0) {
+        showToast("Nenhuma carta disponível para estudar.", "error");
+        return;
+      }
+
+      setStudyMode("deck");
+      setStudyTopic(null);
+      setSession(cardsToStudy);
+      setIndex(0);
+      setShowBack(false);
+      setStartTime(Date.now());
+      setStudyStarted(true);
+      setActiveDeckId(activeDeck.id);
+      setTab("study");
+    } catch (err) {
+      console.error("Erro ao iniciar sessão:", err);
+      showToast("Não foi possível iniciar a sessão de estudo.", "error");
+    }
   }
 
   function pauseSession() {
@@ -2307,60 +2473,82 @@ ${noteContent}
   }
 
   // 🔥 STREAK UPDATE
-  function updateStreak() {
-    const todayKey = getDateKey();
-    const yesterdayKey = getYesterdayKey();
+  async function updateStreak() {
+    if (!user) return;
 
-    const saved = localStorage.getItem("streakData");
-    let lastStudyDate = null;
-    let currentStreak = 0;
+    try {
+      const userRef = doc(db, "users", user.uid);
 
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        lastStudyDate = parsed.lastStudyDate || null;
-        currentStreak = Number(parsed.streak || 0);
-      } catch {
-        lastStudyDate = null;
-        currentStreak = 0;
+      const snap = await getDoc(userRef);
+
+      const data = snap.exists() ? snap.data() : {};
+
+      const todayKey = getDateKey();
+      const yesterdayKey = getYesterdayKey();
+
+      let currentStreak = Number(data.streak || 0);
+      const lastStudyDate = data.lastStudyDate || null;
+
+      // já contou hoje
+      if (lastStudyDate === todayKey) {
+        setStreak(currentStreak);
+        return;
       }
-    }
 
-    // Se já contou hoje, não altera
-    if (lastStudyDate === todayKey) {
+      // continua sequência
+      if (lastStudyDate === yesterdayKey) {
+        currentStreak += 1;
+      } else {
+        // reinicia
+        currentStreak = 1;
+      }
+
+      await updateDoc(userRef, {
+        streak: currentStreak,
+        lastStudyDate: todayKey
+      });
+
       setStreak(currentStreak);
-      return;
+    } catch (error) {
+      console.error("Erro ao atualizar streak:", error);
     }
-
-    // Continua sequência
-    if (lastStudyDate === yesterdayKey) {
-      currentStreak += 1;
-    } else {
-      // Nova sequência
-      currentStreak = 1;
-    }
-
-    const newData = { lastStudyDate: todayKey, streak: currentStreak };
-    localStorage.setItem("streakData", JSON.stringify(newData));
-    setStreak(currentStreak);
   }
 
   async function rate(quality) {
-    const card = session[index];
+    const currentCard = session[index];
+
+    if (!currentCard) {
+      showToast("Erro ao carregar carta.", "error");
+      return;
+    }
+
+    const card = currentCard;
     const responseTime = Date.now() - startTime;
 
     const sm2 = calculateSM2(card, quality);
     const newStability = calculateStability(card, quality, sm2.interval);
-    const idealInterval = calculateNextInterval(newStability);
 
+    let nextInterval = sm2.interval;
+
+    // Esqueci
+    if (quality < 3) {
+      nextInterval = 1;
+    }
+
+    // Difícil
+    if (quality === 3) {
+      nextInterval = 1;
+    }
+
+    // Bom e Fácil usam o SM-2 normal
     const next = new Date();
-    next.setDate(next.getDate() + idealInterval);
+    next.setDate(next.getDate() + nextInterval);
 
     const updatedCard = {
       ...card,
       ...sm2,
       stability: newStability,
-      interval: idealInterval,
+      interval: nextInterval,
       nextReview: next.toISOString(),
       lastReview: new Date().toISOString(),
       reviewHistory: [
@@ -2387,8 +2575,26 @@ ${noteContent}
       prev.map((c, i) => (i === index ? updatedCard : c))
     );
 
-    setTodayCount(prev => prev + 1);
-    updateStreak();
+    const todayKey = getDateKey();
+
+    const newTodayCount = todayCount + 1;
+
+    setTodayCount(newTodayCount);
+
+    if (user) {
+      try {
+        await updateDoc(doc(db, "users", user.uid), {
+          dailyProgress: {
+            date: todayKey,
+            completed: newTodayCount
+          }
+        });
+      } catch (error) {
+        console.error("Erro ao salvar progresso diário:", error);
+      }
+    }
+
+    await updateStreak();
 
     if (index + 1 < session.length) {
       nextCard(index + 1);
@@ -2974,7 +3180,50 @@ ${noteContent}
     );
   }
 
-  if (studyStarted && activeDeck && session.length > 0) {
+  if (studyStarted && session.length > 0) {
+
+    const currentCard = session[index];
+
+    if (!currentCard) {
+      return (
+        <div
+          style={{
+            minHeight: "100vh",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            background: dark ? "#121212" : "#f5f5f5",
+            color: dark ? "#fff" : "#111",
+            padding: 20,
+            textAlign: "center"
+          }}
+        >
+          <div>
+            <h2>⚠️ Erro ao carregar carta</h2>
+
+            <p style={{ opacity: 0.7, marginTop: 10 }}>
+              A sessão de estudo ficou inválida.
+            </p>
+
+            <button
+              onClick={() => {
+                setSession([]);
+                setIndex(0);
+                setStudyStarted(false);
+                setTab("today");
+              }}
+              style={{
+                ...button,
+                marginTop: 20
+              }}
+            >
+              Voltar
+            </button>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div
         style={{
@@ -3032,7 +3281,7 @@ ${noteContent}
                 </div>
               )}
 
-              {studyMode === "topic" && session[index]?.deckName && (
+              {studyMode === "topic" && currentCard?.deckName && (
                 <div
                   style={{
                     marginTop: 4,
@@ -3040,7 +3289,7 @@ ${noteContent}
                     color: dark ? "rgba(255,255,255,0.72)" : "#4b5563"
                   }}
                 >
-                  Deck: <strong style={{ color: dark ? "rgba(255,255,255,0.9)" : "#1f2937" }}>{session[index].deckName}</strong>
+                  Deck: <strong style={{ color: dark ? "rgba(255,255,255,0.9)" : "#1f2937" }}>{currentCard.deckName}</strong>
                 </div>
               )}
             </div>
@@ -3103,7 +3352,7 @@ ${noteContent}
                   boxShadow: dark ? "0 18px 45px rgba(0,0,0,0.35)" : "0 18px 45px rgba(0,0,0,0.10)"
                 }}
               >
-                {session[index].question}
+                {currentCard.question}
               </div>
 
               {/* VERSO */}
@@ -3129,7 +3378,7 @@ ${noteContent}
                   boxShadow: dark ? "0 18px 45px rgba(0,0,0,0.35)" : "0 18px 45px rgba(0,0,0,0.10)"
                 }}
               >
-                {session[index].answer}
+                {currentCard.answer}
               </div>
             </div>
 
@@ -3138,7 +3387,7 @@ ${noteContent}
               onClick={(e) => {
                 e.stopPropagation(); // 🔥 MUITO IMPORTANTE
 
-                const card = session[index];
+                const card = currentCard;
                 const side = showBack ? "back" : "front";
 
                 const text =
@@ -3351,6 +3600,35 @@ ${noteContent}
               placeholder="Tópico / grupo (ex: Inglês, Espanhol, Direito Penal)"
               style={inputStyle}
             />
+
+            <select
+              value={deckLanguage}
+              onChange={(e) => setDeckLanguage(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "14px 16px",
+                borderRadius: 16,
+                border: dark
+                  ? "1px solid rgba(255,255,255,0.08)"
+                  : "1px solid rgba(0,0,0,0.08)",
+                background: dark ? "#1c1c1f" : "#fff",
+                color: dark ? "#fff" : "#111",
+                fontSize: 16,
+                marginTop: 10,
+                outline: "none"
+              }}
+            >
+              <option value="pt-BR">Português</option>
+              <option value="en-US">Inglês</option>
+              <option value="es-ES">Espanhol</option>
+              <option value="fr-FR">Francês</option>
+              <option value="de-DE">Alemão</option>
+              <option value="it-IT">Italiano</option>
+              <option value="zh-CN">Mandarim</option>
+              <option value="ko-KR">Coreano</option>
+              <option value="ja-JP">Japonês</option>
+              <option value="ar-SA">Árabe</option>
+            </select>
             <button
               onClick={createDeck}
               style={{ ...button, background: "#2196F3", color: "#fff" }}
@@ -3426,19 +3704,44 @@ ${noteContent}
             )}
 
             {activeDeck && !isPresetDeck && (
-              <button
-                onClick={() => deleteDeck(activeDeck.id)}
-                style={{
-                  ...button,
-                  background: dark ? "rgba(255,255,255,0.06)" : "rgba(220,0,0,0.08)",
-                  color: dark ? "#fff" : "#B00020",
-                  border: dark
-                    ? "1px solid rgba(255,255,255,0.08)"
-                    : "1px solid rgba(176,0,32,0.18)"
-                }}
-              >
-                🗑️ {t("deleteDeck")}
-              </button>
+              <>
+                <button
+                  onClick={() => {
+                    setEditDeckName(activeDeck.name || "");
+                    setEditDeckTopic(activeDeck.topic || "");
+                    setEditingDeck(true);
+                  }}
+                  style={{
+                    ...button,
+                    marginBottom: 10,
+                    background: dark
+                      ? "rgba(255,255,255,0.06)"
+                      : "rgba(0,0,0,0.04)",
+                    color: dark ? "#fff" : "#111",
+                    border: dark
+                      ? "1px solid rgba(255,255,255,0.08)"
+                      : "1px solid rgba(0,0,0,0.08)"
+                  }}
+                >
+                  ✏️ Editar deck
+                </button>
+
+                <button
+                  onClick={() => deleteDeck(activeDeck.id)}
+                  style={{
+                    ...button,
+                    background: dark
+                      ? "rgba(255,255,255,0.06)"
+                      : "rgba(220,0,0,0.08)",
+                    color: dark ? "#fff" : "#B00020",
+                    border: dark
+                      ? "1px solid rgba(255,255,255,0.08)"
+                      : "1px solid rgba(176,0,32,0.18)"
+                  }}
+                >
+                  🗑️ {t("deleteDeck")}
+                </button>
+              </>
             )}
 
             {!activeDeck && (
@@ -4369,7 +4672,7 @@ ${noteContent}
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   {dueByTopic.map(group => (
                     <div
-                      key={group.topic}
+                      key={group.topicKey}
                       style={{
                         padding: 14,
                         borderRadius: 16,
@@ -5328,6 +5631,117 @@ ${noteContent}
                 }}
               >
                 Sair da conta
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editingDeck && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.55)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 20,
+            overflowY: "auto",
+            zIndex: 9999
+          }}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: 520,
+              borderRadius: 24,
+              padding: 22,
+              background: dark ? "#17172A" : "#ffffff",
+              border: dark
+                ? "1px solid rgba(255,255,255,0.08)"
+                : "1px solid rgba(0,0,0,0.06)",
+              boxShadow: dark
+                ? "0 18px 50px rgba(0,0,0,0.45)"
+                : "0 18px 50px rgba(0,0,0,0.14)"
+            }}
+          >
+            <h2
+              style={{
+                marginTop: 0,
+                marginBottom: 18,
+                color: dark ? "#fff" : "#111"
+              }}
+            >
+              ✏️ Editar deck
+            </h2>
+
+            <input
+              value={editDeckName}
+              onChange={(e) => setEditDeckName(e.target.value)}
+              placeholder="Nome do deck"
+              style={{
+                width: "100%",
+                padding: "14px 16px",
+                borderRadius: 16,
+                border: dark
+                  ? "1px solid rgba(255,255,255,0.08)"
+                  : "1px solid rgba(0,0,0,0.08)",
+                background: dark ? "#1c1c1f" : "#fff",
+                color: dark ? "#fff" : "#111",
+                fontSize: 16,
+                marginBottom: 12,
+                outline: "none"
+              }}
+            />
+
+            <input
+              value={editDeckTopic}
+              onChange={(e) => setEditDeckTopic(e.target.value)}
+              placeholder="Tópico"
+              style={{
+                width: "100%",
+                padding: "14px 16px",
+                borderRadius: 16,
+                border: dark
+                  ? "1px solid rgba(255,255,255,0.08)"
+                  : "1px solid rgba(0,0,0,0.08)",
+                background: dark ? "#1c1c1f" : "#fff",
+                color: dark ? "#fff" : "#111",
+                fontSize: 16,
+                marginBottom: 18,
+                outline: "none"
+              }}
+            />
+
+            <div
+              style={{
+                display: "flex",
+                gap: 12
+              }}
+            >
+              <button
+                onClick={() => setEditingDeck(false)}
+                style={{
+                  ...button,
+                  background: dark
+                    ? "rgba(255,255,255,0.05)"
+                    : "rgba(0,0,0,0.05)",
+                  color: dark ? "#fff" : "#111"
+                }}
+              >
+                Cancelar
+              </button>
+
+              <button
+                onClick={saveDeckEdit}
+                style={{
+                  ...button,
+                  background: "linear-gradient(135deg, #7C5CFF, #5A8BFF)",
+                  color: "#fff"
+                }}
+              >
+                Salvar
               </button>
             </div>
           </div>
