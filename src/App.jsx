@@ -1816,36 +1816,38 @@ ${noteContent}
   }
 
   useEffect(() => {
-    async function loadStudyStats() {
-      if (!user) return;
+    if (!user) {
+      setStreak(0);
+      setTodayCount(0);
+      return;
+    }
 
-      try {
-        const userRef = doc(db, "users", user.uid);
-        const snap = await getDoc(userRef);
+    const userRef = doc(db, "users", user.uid);
 
+    const unsubscribe = onSnapshot(
+      userRef,
+      (snap) => {
         if (!snap.exists()) return;
 
         const data = snap.data();
+        const todayKey = getDateKey();
 
-        // streak
         if (typeof data.streak === "number") {
           setStreak(data.streak);
         }
 
-        // contador diário
-        const todayKey = getDateKey();
-
         if (data.dailyProgress?.date === todayKey) {
-          setTodayCount(data.dailyProgress.completed || 0);
+          setTodayCount(Number(data.dailyProgress.completed || 0));
         } else {
           setTodayCount(0);
         }
-      } catch (err) {
-        console.error("Erro ao carregar stats:", err);
+      },
+      (error) => {
+        console.error("Erro ao sincronizar stats:", error);
       }
-    }
+    );
 
-    loadStudyStats();
+    return () => unsubscribe();
   }, [user]);
 
   async function completePremiumOnboarding() {
