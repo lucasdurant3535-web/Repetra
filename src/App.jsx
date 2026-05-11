@@ -2388,43 +2388,7 @@ ${noteContent}
   const [loading, setLoading] = useState(false);
 
 
-  function startSession() {
-    try {
-      if (!activeDeck) {
-        showToast("Selecione um deck para estudar.", "error");
-        return;
-      }
-
-      const deckCards = Array.isArray(activeDeck.cards) ? activeDeck.cards : [];
-
-      if (deckCards.length === 0) {
-        showToast("Esse deck não tem cartas ainda.", "error");
-        return;
-      }
-
-      const due = getDue(deckCards);
-
-      const cardsToStudy = due.length > 0 ? due : deckCards;
-
-      if (cardsToStudy.length === 0) {
-        showToast("Nenhuma carta disponível para estudar.", "error");
-        return;
-      }
-
-      setStudyMode("deck");
-      setStudyTopic(null);
-      setSession(cardsToStudy);
-      setIndex(0);
-      setShowBack(false);
-      setStartTime(Date.now());
-      setStudyStarted(true);
-      setActiveDeckId(activeDeck.id);
-      setTab("study");
-    } catch (err) {
-      console.error("Erro ao iniciar sessão:", err);
-      showToast("Não foi possível iniciar a sessão de estudo.", "error");
-    }
-  }
+  
 
   function pauseSession() {
     if (studyStarted && session.length > 0) {
@@ -4741,18 +4705,6 @@ ${noteContent}
                 }}
               />
             </div>
-
-            <button
-              onClick={startSession}
-              style={{
-                ...button,
-                background: "#4CAF50",
-                color: "#fff",
-                marginTop: 14
-              }}
-            >
-              ▶️ {t("startStudy")}
-            </button>
           </div>
         </>
       )}
