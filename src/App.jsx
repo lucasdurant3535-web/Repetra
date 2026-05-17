@@ -2612,18 +2612,23 @@ ${noteContent}
   }
 
   const cards = activeDeck?.cards || [];
+
+  const statsCards = activeDeck
+    ? activeDeck.cards || []
+    : allDecks.flatMap(deck => deck.cards || []);
+
   const dueCount = getDue(cards).length;
   const newCardsCount = cards.filter(c => c.repetition === 0).length;
   const progressPercent = Math.min((todayCount / DAILY_GOAL) * 100, 100);
 
   const averageStability =
-    cards.length > 0
-      ? cards.reduce((sum, c) => sum + (c.stability || 1), 0) / cards.length
+    statsCards.length > 0
+      ? statsCards.reduce((sum, c) => sum + (c.stability || 1), 0) / statsCards.length
       : 0;
 
   const averageRetention =
-    cards.length > 0
-      ? cards.reduce((sum, c) => sum + calculateRetention(c), 0) / cards.length
+    statsCards.length > 0
+      ? statsCards.reduce((sum, c) => sum + calculateRetention(c), 0) / statsCards.length
       : 0;
 
   const allReviews = allDecks.flatMap(deck =>
