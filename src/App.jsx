@@ -157,6 +157,7 @@ export default function App() {
   const [editingDeck, setEditingDeck] = useState(false);
   const [editDeckName, setEditDeckName] = useState("");
   const [editDeckTopic, setEditDeckTopic] = useState("");
+  const [decksLoaded, setDecksLoaded] = useState(false);
 
 
   const subscription = userData?.subscription || {};
@@ -1020,34 +1021,60 @@ ${noteContent}
     };
   }
 
+  function normalizeTopic(topic) {
+    return String(topic || "Geral")
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+  }
+
+  function formatTopicName(topic) {
+    const clean = String(topic || "Geral").trim();
+    if (!clean) return "Geral";
+
+    return clean.charAt(0).toUpperCase() + clean.slice(1);
+  }
+
   function getDueCardsByTopic() {
+    if (!decksLoaded) return [];
+
     const topicMap = {};
 
     decks.forEach(deck => {
       if (!deck.cards || !Array.isArray(deck.cards)) return;
 
-      const topic = deck.topic || "Geral";
+      const rawTopic = deck.topic || "Geral";
+      const topicKey = normalizeTopic(rawTopic);
+      const topicLabel = formatTopicName(rawTopic);
+
       const dueCards = getDue(deck.cards);
 
       if (dueCards.length === 0) return;
 
-      if (!topicMap[topic]) {
-        topicMap[topic] = {
-          topic,
+      if (!topicMap[topicKey]) {
+        topicMap[topicKey] = {
+          topic: topicLabel,
+          topicKey,
           count: 0,
           decks: [],
           cards: []
         };
       }
 
-      topicMap[topic].count += dueCards.length;
-      topicMap[topic].decks.push(deck.id);
-      topicMap[topic].cards.push(
+      topicMap[topicKey].count += dueCards.length;
+
+      if (!topicMap[topicKey].decks.includes(deck.id)) {
+        topicMap[topicKey].decks.push(deck.id);
+      }
+
+      topicMap[topicKey].cards.push(
         ...dueCards.map(card => ({
           ...card,
           deckId: deck.id,
           deckName: deck.name,
-          topic
+          topic: topicMap[topicKey].topic,
+          topicKey
         }))
       );
     });
@@ -1640,8 +1667,11 @@ ${noteContent}
   useEffect(() => {
     if (!user) {
       setDecks([]);
+      setDecksLoaded(false);
       return;
     }
+
+    setDecksLoaded(false);
 
     const decksRef = collection(db, "users", user.uid, "decks");
 
@@ -1654,10 +1684,12 @@ ${noteContent}
         }));
 
         setDecks(loadedDecks);
+        setDecksLoaded(true);
       },
       (error) => {
         console.error("Erro ao sincronizar decks:", error);
         showToast("Erro ao sincronizar decks", "error");
+        setDecksLoaded(true);
       }
     );
 
@@ -2388,7 +2420,7 @@ ${noteContent}
   const [loading, setLoading] = useState(false);
 
 
-  
+
 
   function pauseSession() {
     if (studyStarted && session.length > 0) {
