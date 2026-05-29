@@ -16,8 +16,8 @@ export default defineConfig({
       },
 
       manifest: {
-        name: "Repetra",
-        short_name: "Repetra",
+        name: "Cyrna",
+        short_name: "Cyrna",
         description: "O primeiro sistema de memória que se adapta ao seu cérebro em tempo real.",
         start_url: ".",
         display: "standalone",
