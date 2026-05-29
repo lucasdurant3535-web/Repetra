@@ -532,7 +532,7 @@ export default function App() {
     if (!("Notification" in window)) return;
     if (Notification.permission !== "granted") return;
 
-    new Notification("Repetra", {
+    new Notification("Cyrna", {
       body: "Hora de estudar. Sua memória precisa de consistência 🧠",
       icon: "/pwa-192x192.png"
     });
@@ -2998,12 +2998,12 @@ ${noteContent}
               WebkitTextFillColor: "transparent"
             }}
           >
-            Repetra
+            Cyrna
           </h1>
 
           <img
             src="/logo-192.png"
-            alt="Repetra logo"
+            alt="Cyrna logo"
             style={{
               width: 52,
               height: 52,
@@ -3078,7 +3078,7 @@ ${noteContent}
           <div style={{ marginBottom: 14 }}>
             <img
               src="/logo-192.png"
-              alt="Repetra logo"
+              alt="Cyrna logo"
               style={{
                 width: 56,
                 height: 56,
@@ -3099,7 +3099,7 @@ ${noteContent}
               letterSpacing: -0.5
             }}
           >
-            Repetra
+            Cyrna
           </h1>
 
           <p style={{ fontSize: 14, opacity: 10, marginTop: 10, marginBottom: 24 }}>
@@ -5306,7 +5306,7 @@ ${noteContent}
             >
               <img
                 src="/logo-192.png"
-                alt="Repetra logo"
+                alt="Cyrna logo"
                 style={{
                   width: 42,
                   height: 42,
@@ -5327,7 +5327,7 @@ ${noteContent}
                     lineHeight: 1.1
                   }}
                 >
-                  Repetra
+                  Cyrna
                 </div>
 
                 <div
@@ -5791,7 +5791,7 @@ ${noteContent}
             </div>
 
             <h2 style={{ marginTop: 16, marginBottom: 10, fontSize: 28, lineHeight: 1.1 }}>
-              Agora o Repetra ficou ainda mais inteligente
+              Agora o Cyrna ficou ainda mais inteligente
             </h2>
 
             <p style={{ marginTop: 0, marginBottom: 18, fontSize: 15, lineHeight: 1.65, opacity: 0.82 }}>
@@ -5863,7 +5863,7 @@ ${noteContent}
                   Nosso sistema é baseado em pesquisas clássicas sobre memória, iniciadas por
                   <strong> Hermann Ebbinghaus</strong>, que demonstraram que esquecemos grande parte do que aprendemos em poucas horas ou dias — um fenômeno conhecido como <strong>curva do esquecimento</strong>.
                   <br /><br />
-                  Para combater isso, o Repetra utiliza <strong>repetição espaçada</strong>, uma técnica comprovada que agenda revisões exatamente no momento em que você está prestes a esquecer. Isso reduz drasticamente a perda de informação ao longo do tempo.
+                  Para combater isso, o Cyrna utiliza <strong>repetição espaçada</strong>, uma técnica comprovada que agenda revisões exatamente no momento em que você está prestes a esquecer. Isso reduz drasticamente a perda de informação ao longo do tempo.
                   <br /><br />
                   Além disso, o sistema utiliza <strong>recuperação ativa</strong> — ou seja, você não apenas relê, mas precisa lembrar ativamente da resposta. Esse processo fortalece as conexões neurais de forma muito mais eficiente do que leitura passiva.
                   <br /><br />
