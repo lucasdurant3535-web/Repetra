@@ -1382,6 +1382,11 @@ ${noteContent}
   }
 
   async function speakWithAI(text, lang) {
+    if (!isPremium) {
+      showToast("🔒 Áudio com IA é um recurso Premium");
+      setTab("premium");
+      return;
+    }
     try {
       const cleanText = String(text || "").trim();
       const cleanLang = String(lang || "").trim().toLowerCase();
@@ -3413,6 +3418,12 @@ ${noteContent}
                 if (!text) return;
                 if (!lang) return;
                 if (lang.toLowerCase().startsWith("pt")) return;
+
+                if (!isPremium) {
+                  showToast("🔒 Áudio com IA é um recurso Premium");
+                  setTab("premium");
+                  return;
+                }
 
                 speakWithAI(text, lang);
               }}
