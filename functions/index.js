@@ -353,8 +353,8 @@ exports.createCheckoutSession = onCall(
             quantity: 1,
           },
         ],
-        success_url: "https://dont-forget-it-khaki.vercel.app/?checkout=success",
-        cancel_url: "https://dont-forget-it-khaki.vercel.app/?checkout=cancel",
+        success_url: "https://cyrna.vercel.app/?checkout=success",
+        cancel_url: "https://cyrna.vercel.app/?checkout=cancel",
         metadata: {
           uid,
           email,
@@ -654,7 +654,7 @@ exports.createCustomerPortalSession = onCall(
 
     const session = await stripe.billingPortal.sessions.create({
       customer: customerId,
-      return_url: "https://dont-forget-it-khaki.vercel.app/",
+      return_url: "https://cyrna.vercel.app/",
     });
 
     return { url: session.url };
