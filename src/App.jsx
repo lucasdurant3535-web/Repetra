@@ -1383,8 +1383,12 @@ ${noteContent}
 
   async function speakWithAI(text, lang) {
     if (!isPremium) {
-      showToast("🔒 Áudio com IA é um recurso Premium");
-      setTab("premium");
+      showToast("🔒 Áudio com IA é um recurso Premium", "error");
+
+      setTimeout(() => {
+        setTab("premium");
+      }, 400);
+
       return;
     }
     try {
@@ -3243,6 +3247,35 @@ ${noteContent}
           alignItems: "center"
         }}
       >
+
+        {toast && (
+          <div
+            style={{
+              position: "fixed",
+              bottom: 30,
+              left: "50%",
+              transform: "translateX(-50%)",
+              background:
+                toast.type === "success"
+                  ? "linear-gradient(135deg, #7C5CFF, #5A8BFF)"
+                  : "rgba(0,0,0,0.85)",
+              color: "#fff",
+              padding: "14px 20px",
+              borderRadius: 14,
+              fontSize: 14,
+              fontWeight: 600,
+              boxShadow: "0 12px 40px rgba(0,0,0,0.3)",
+              zIndex: 10001,
+              opacity: 1,
+              animation: "fadeInUp 0.4s ease",
+              maxWidth: "90%",
+              textAlign: "center"
+            }}
+          >
+            {toast.message}
+          </div>
+        )}
+
         <div style={{ width: "100%", maxWidth: 620 }}>
           <div
             style={{
@@ -3420,8 +3453,12 @@ ${noteContent}
                 if (lang.toLowerCase().startsWith("pt")) return;
 
                 if (!isPremium) {
-                  showToast("🔒 Áudio com IA é um recurso Premium");
-                  setTab("premium");
+                  showToast("🔒 Áudio com IA é um recurso Premium", "error");
+
+                  setTimeout(() => {
+                    setTab("premium");
+                  }, 400);
+
                   return;
                 }
 
