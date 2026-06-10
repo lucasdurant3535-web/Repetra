@@ -158,6 +158,7 @@ export default function App() {
   const [editDeckName, setEditDeckName] = useState("");
   const [editDeckTopic, setEditDeckTopic] = useState("");
   const [decksLoaded, setDecksLoaded] = useState(false);
+  const [showLogin, setShowLogin] = useState(false);
 
 
   const subscription = userData?.subscription || {};
@@ -3031,7 +3032,435 @@ ${noteContent}
     );
   }
 
-  if (!user) {
+  if (!user && !showLogin) {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          background: dark
+            ? "linear-gradient(180deg, #0b0b12 0%, #121212 100%)"
+            : "linear-gradient(180deg, #ffffff 0%, #f5f5ff 100%)",
+          color: dark ? "#fff" : "#111",
+          padding: 20
+        }}
+      >
+        {toast && (
+          <div
+            style={{
+              position: "fixed",
+              bottom: 30,
+              left: "50%",
+              transform: "translateX(-50%)",
+              background:
+                toast.type === "success"
+                  ? "linear-gradient(135deg, #7C5CFF, #5A8BFF)"
+                  : "rgba(0,0,0,0.85)",
+              color: "#fff",
+              padding: "14px 20px",
+              borderRadius: 14,
+              fontSize: 14,
+              fontWeight: 600,
+              boxShadow: "0 12px 40px rgba(0,0,0,0.3)",
+              zIndex: 10001,
+              maxWidth: "90%",
+              textAlign: "center"
+            }}
+          >
+            {toast.message}
+          </div>
+        )}
+
+        <header
+          style={{
+            width: "100%",
+            maxWidth: 1120,
+            margin: "0 auto",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            padding: "18px 0"
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <img
+              src="/logo-192.png"
+              alt="Cyrna"
+              style={{
+                width: 38,
+                height: 38,
+                borderRadius: 10
+              }}
+            />
+
+            <strong
+              style={{
+                fontSize: 22,
+                fontFamily: "Sora, sans-serif"
+              }}
+            >
+              Cyrna
+            </strong>
+          </div>
+
+          <button
+            onClick={() => setShowLogin(true)}
+            style={{
+              border: "none",
+              borderRadius: 999,
+              padding: "10px 16px",
+              fontWeight: 800,
+              cursor: "pointer",
+              background: dark ? "rgba(255,255,255,0.08)" : "#fff",
+              color: dark ? "#fff" : "#111",
+              boxShadow: dark
+                ? "none"
+                : "0 8px 24px rgba(0,0,0,0.08)"
+            }}
+          >
+            Entrar
+          </button>
+        </header>
+
+        <main
+          style={{
+            maxWidth: 1120,
+            margin: "0 auto",
+            padding: "50px 0 30px"
+          }}
+        >
+          <section
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+              gap: 34,
+              alignItems: "center"
+            }}
+          >
+            <div>
+              <div
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 8,
+                  padding: "8px 12px",
+                  borderRadius: 999,
+                  background: dark
+                    ? "rgba(124,92,255,0.14)"
+                    : "rgba(124,92,255,0.10)",
+                  color: dark ? "#c7bfff" : "#5A35E8",
+                  fontWeight: 800,
+                  fontSize: 13,
+                  marginBottom: 18
+                }}
+              >
+                ✨ Flashcards com IA + revisão inteligente
+              </div>
+
+              <h1
+                style={{
+                  fontSize: "clamp(40px, 7vw, 72px)",
+                  lineHeight: 0.95,
+                  letterSpacing: -2,
+                  margin: 0,
+                  fontFamily: "Sora, sans-serif"
+                }}
+              >
+                Aprenda melhor.
+                <br />
+                <span
+                  style={{
+                    background: "linear-gradient(135deg, #7C5CFF, #5A8BFF)",
+                    WebkitBackgroundClip: "text",
+                    color: "transparent"
+                  }}
+                >
+                  Esqueça menos.
+                </span>
+              </h1>
+
+              <p
+                style={{
+                  fontSize: 18,
+                  lineHeight: 1.7,
+                  opacity: 0.82,
+                  marginTop: 22,
+                  maxWidth: 560
+                }}
+              >
+                O Cyrna transforma seus estudos em flashcards inteligentes e usa
+                repetição espaçada para ajudar você a lembrar no momento certo.
+              </p>
+
+              <div
+                style={{
+                  display: "flex",
+                  gap: 12,
+                  flexWrap: "wrap",
+                  marginTop: 28
+                }}
+              >
+                <button
+                  onClick={() => {
+                    setAuthMode("register");
+                    setShowLogin(true);
+                  }}
+                  style={{
+                    ...button,
+                    width: "auto",
+                    padding: "14px 22px",
+                    borderRadius: 999,
+                    background: "linear-gradient(135deg, #7C5CFF, #5A8BFF)",
+                    color: "#fff",
+                    boxShadow: "0 12px 35px rgba(124,92,255,0.28)"
+                  }}
+                >
+                  Começar grátis
+                </button>
+
+                <button
+                  onClick={() => setShowLogin(true)}
+                  style={{
+                    ...button,
+                    width: "auto",
+                    padding: "14px 22px",
+                    borderRadius: 999,
+                    background: dark
+                      ? "rgba(255,255,255,0.06)"
+                      : "rgba(0,0,0,0.04)",
+                    color: dark ? "#fff" : "#111",
+                    border: dark
+                      ? "1px solid rgba(255,255,255,0.08)"
+                      : "1px solid rgba(0,0,0,0.08)"
+                  }}
+                >
+                  Já tenho conta
+                </button>
+              </div>
+
+              <p style={{ marginTop: 16, fontSize: 13, opacity: 0.65 }}>
+                Não precisa instalar pela loja. Use direto no navegador ou como PWA.
+              </p>
+            </div>
+
+            <div
+              style={{
+                borderRadius: 32,
+                padding: 22,
+                background: dark
+                  ? "rgba(255,255,255,0.04)"
+                  : "rgba(255,255,255,0.78)",
+                border: dark
+                  ? "1px solid rgba(255,255,255,0.08)"
+                  : "1px solid rgba(0,0,0,0.06)",
+                boxShadow: dark
+                  ? "0 24px 80px rgba(0,0,0,0.35)"
+                  : "0 24px 80px rgba(90,139,255,0.18)"
+              }}
+            >
+              <div
+                style={{
+                  borderRadius: 28,
+                  padding: 22,
+                  background: dark ? "#17172A" : "#ffffff"
+                }}
+              >
+                <div style={{ fontSize: 13, opacity: 0.65, marginBottom: 14 }}>
+                  Hoje para revisar
+                </div>
+
+                <div
+                  style={{
+                    padding: 18,
+                    borderRadius: 22,
+                    background: dark ? "#202033" : "#f6f6ff",
+                    marginBottom: 12
+                  }}
+                >
+                  <strong>🇪🇸 Espanhol</strong>
+                  <p style={{ margin: "8px 0 0", opacity: 0.7 }}>
+                    12 cartas no momento ideal
+                  </p>
+                </div>
+
+                <div
+                  style={{
+                    padding: 22,
+                    borderRadius: 24,
+                    background: "linear-gradient(135deg, #7C5CFF, #5A8BFF)",
+                    color: "#fff",
+                    textAlign: "center",
+                    marginTop: 16
+                  }}
+                >
+                  <div style={{ fontSize: 14, opacity: 0.85 }}>
+                    Flashcard
+                  </div>
+
+                  <h2 style={{ margin: "12px 0", fontSize: 30 }}>
+                    I remember
+                  </h2>
+
+                  <p style={{ margin: 0, opacity: 0.85 }}>
+                    Toque para revelar
+                  </p>
+                </div>
+
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: 10,
+                    marginTop: 14
+                  }}
+                >
+                  <div
+                    style={{
+                      padding: 14,
+                      borderRadius: 18,
+                      background: dark
+                        ? "rgba(255,255,255,0.06)"
+                        : "rgba(0,0,0,0.04)"
+                    }}
+                  >
+                    🔥 7 dias
+                    <br />
+                    <span style={{ fontSize: 12, opacity: 0.65 }}>streak</span>
+                  </div>
+
+                  <div
+                    style={{
+                      padding: 14,
+                      borderRadius: 18,
+                      background: dark
+                        ? "rgba(255,255,255,0.06)"
+                        : "rgba(0,0,0,0.04)"
+                    }}
+                  >
+                    🧠 91%
+                    <br />
+                    <span style={{ fontSize: 12, opacity: 0.65 }}>retenção</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section style={{ marginTop: 70 }}>
+            <h2
+              style={{
+                fontSize: "clamp(28px, 4vw, 44px)",
+                textAlign: "center",
+                marginBottom: 14,
+                fontFamily: "Sora, sans-serif"
+              }}
+            >
+              Você não esquece porque é ruim.
+            </h2>
+
+            <p
+              style={{
+                maxWidth: 720,
+                margin: "0 auto",
+                textAlign: "center",
+                lineHeight: 1.7,
+                opacity: 0.78,
+                fontSize: 17
+              }}
+            >
+              Seu cérebro naturalmente esquece informações que não são revisadas.
+              O Cyrna ajuda você a revisar no momento certo, antes que o conteúdo
+              desapareça da memória.
+            </p>
+          </section>
+
+          <section
+            style={{
+              marginTop: 54,
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+              gap: 16
+            }}
+          >
+            {[
+              ["✨", "Crie com IA", "Transforme temas, anotações e assuntos em flashcards."],
+              ["⏱️", "Revise na hora certa", "As cartas voltam conforme sua dificuldade."],
+              ["🔊", "Áudio para idiomas", "Ouça a pronúncia e estude com mais contexto."],
+              ["📊", "Acompanhe sua evolução", "Veja streak, meta diária e métricas de memória."]
+            ].map((item) => (
+              <div
+                key={item[1]}
+                style={{
+                  padding: 20,
+                  borderRadius: 24,
+                  background: dark
+                    ? "rgba(255,255,255,0.04)"
+                    : "#ffffff",
+                  border: dark
+                    ? "1px solid rgba(255,255,255,0.08)"
+                    : "1px solid rgba(0,0,0,0.06)",
+                  boxShadow: dark
+                    ? "none"
+                    : "0 14px 40px rgba(0,0,0,0.06)"
+                }}
+              >
+                <div style={{ fontSize: 28 }}>{item[0]}</div>
+                <h3 style={{ marginBottom: 8 }}>{item[1]}</h3>
+                <p style={{ opacity: 0.72, lineHeight: 1.6, margin: 0 }}>
+                  {item[2]}
+                </p>
+              </div>
+            ))}
+          </section>
+
+          <section
+            style={{
+              marginTop: 70,
+              textAlign: "center",
+              padding: 34,
+              borderRadius: 30,
+              background: "linear-gradient(135deg, #7C5CFF, #5A8BFF)",
+              color: "#fff"
+            }}
+          >
+            <h2
+              style={{
+                fontSize: "clamp(28px, 5vw, 46px)",
+                margin: 0,
+                fontFamily: "Sora, sans-serif"
+              }}
+            >
+              Comece gratuitamente hoje.
+            </h2>
+
+            <p style={{ opacity: 0.88, fontSize: 17, marginTop: 12 }}>
+              Crie seus primeiros flashcards e veja como o Cyrna organiza suas revisões.
+            </p>
+
+            <button
+              onClick={() => {
+                setAuthMode("register");
+                setShowLogin(true);
+              }}
+              style={{
+                ...button,
+                width: "auto",
+                marginTop: 18,
+                padding: "14px 24px",
+                borderRadius: 999,
+                background: "#fff",
+                color: "#5A35E8",
+                fontWeight: 900
+              }}
+            >
+              Criar conta grátis
+            </button>
+          </section>
+        </main>
+      </div>
+    );
+  }
+
+  if (!user && showLogin) {
     return (
       <div
         style={{
