@@ -159,7 +159,13 @@ export default function App() {
   const [editDeckTopic, setEditDeckTopic] = useState("");
   const [decksLoaded, setDecksLoaded] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
-  const [publicPage, setPublicPage] = useState("home");
+  const initialPublicPage = window.location.pathname.includes("privacy")
+    ? "privacy"
+    : window.location.pathname.includes("terms")
+      ? "terms"
+      : "home";
+
+  const [publicPage, setPublicPage] = useState(initialPublicPage);
 
 
   const subscription = userData?.subscription || {};
@@ -3056,7 +3062,10 @@ ${noteContent}
           }}
         >
           <button
-            onClick={() => setPublicPage("home")}
+            onClick={() => {
+              window.history.pushState({}, "", "/");
+              setPublicPage("home");
+            }}
             style={{
               border: "none",
               background: "transparent",
@@ -3238,7 +3247,10 @@ ${noteContent}
           }}
         >
           <button
-            onClick={() => setPublicPage("home")}
+            onClick={() => {
+              window.history.pushState({}, "", "/");
+              setPublicPage("home");
+            }}
             style={{
               border: "none",
               background: "transparent",
@@ -3867,7 +3879,10 @@ ${noteContent}
             }}
           >
             <button
-              onClick={() => setPublicPage("privacy")}
+              onClick={() => {
+                window.history.pushState({}, "", "/privacy");
+                setPublicPage("privacy");
+              }}
               style={{
                 border: "none",
                 background: "transparent",
@@ -3880,7 +3895,10 @@ ${noteContent}
             </button>
 
             <button
-              onClick={() => setPublicPage("terms")}
+              onClick={() => {
+                window.history.pushState({}, "", "/terms");
+                setPublicPage("terms");
+              }}
               style={{
                 border: "none",
                 background: "transparent",
