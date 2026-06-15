@@ -159,6 +159,7 @@ export default function App() {
   const [editDeckTopic, setEditDeckTopic] = useState("");
   const [decksLoaded, setDecksLoaded] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
+  const [publicPage, setPublicPage] = useState("home");
 
 
   const subscription = userData?.subscription || {};
@@ -3032,6 +3033,404 @@ ${noteContent}
     );
   }
 
+  if (!user && publicPage === "privacy") {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          background: dark ? "#121212" : "#f7f7fb",
+          color: dark ? "#fff" : "#111",
+          padding: 20
+        }}
+      >
+        <div
+          style={{
+            maxWidth: 860,
+            margin: "0 auto",
+            background: dark ? "#1e1e1e" : "#ffffff",
+            borderRadius: 24,
+            padding: "28px 24px",
+            boxShadow: dark
+              ? "0 20px 50px rgba(0,0,0,0.35)"
+              : "0 20px 50px rgba(0,0,0,0.08)"
+          }}
+        >
+          <button
+            onClick={() => setPublicPage("home")}
+            style={{
+              border: "none",
+              background: "transparent",
+              color: dark ? "#fff" : "#111",
+              cursor: "pointer",
+              fontWeight: 800,
+              marginBottom: 18
+            }}
+          >
+            ← Voltar
+          </button>
+
+          <h1 style={{ marginTop: 0 }}>Política de Privacidade</h1>
+
+          <p style={{ opacity: 0.75 }}>
+            Última atualização: 14 de junho de 2026
+          </p>
+
+          <p>
+            Esta Política de Privacidade explica como o Cyrna coleta, usa,
+            armazena e protege informações dos usuários ao utilizar nosso
+            aplicativo e site.
+          </p>
+
+          <h2>1. Quem somos</h2>
+          <p>
+            O Cyrna é um aplicativo de estudos que utiliza flashcards, repetição
+            espaçada, recursos de inteligência artificial e áudio para ajudar
+            usuários a estudar e memorizar conteúdos com mais eficiência.
+          </p>
+
+          <h2>2. Informações que coletamos</h2>
+          <p>Podemos coletar os seguintes tipos de informações:</p>
+
+          <ul>
+            <li>Nome, e-mail e dados de autenticação.</li>
+            <li>Decks, cards, notas, tópicos e conteúdos criados pelo usuário.</li>
+            <li>Histórico de revisões, progresso, streak, estatísticas e métricas de estudo.</li>
+            <li>Informações de uso do aplicativo, como páginas acessadas, eventos e interações.</li>
+            <li>Informações relacionadas a pagamentos, processadas por terceiros.</li>
+          </ul>
+
+          <h2>3. Como usamos suas informações</h2>
+          <p>Usamos suas informações para:</p>
+
+          <ul>
+            <li>Criar e manter sua conta.</li>
+            <li>Salvar seus decks, cards, notas e progresso.</li>
+            <li>Sincronizar seus dados entre dispositivos.</li>
+            <li>Gerar cards e áudios com recursos de inteligência artificial.</li>
+            <li>Processar assinaturas e acesso Premium.</li>
+            <li>Melhorar a experiência, estabilidade e desempenho do Cyrna.</li>
+            <li>Analisar métricas de uso através do Google Analytics.</li>
+          </ul>
+
+          <h2>4. Inteligência artificial</h2>
+          <p>
+            O Cyrna pode enviar conteúdos inseridos pelo usuário, como temas,
+            textos, cards ou frases, para serviços de inteligência artificial,
+            incluindo a OpenAI, com a finalidade de gerar flashcards, textos de
+            estudo e áudio.
+          </p>
+
+          <p>
+            Recomendamos que você não insira informações sensíveis, confidenciais
+            ou altamente pessoais nos campos de geração com IA.
+          </p>
+
+          <h2>5. Serviços de terceiros</h2>
+          <p>O Cyrna utiliza serviços de terceiros para operar o aplicativo:</p>
+
+          <ul>
+            <li>Firebase, para autenticação, banco de dados, hospedagem de dados e funções.</li>
+            <li>Google Login, para autenticação com conta Google.</li>
+            <li>Google Analytics, para análise de uso e melhoria do serviço.</li>
+            <li>Stripe, para processamento de pagamentos e assinaturas.</li>
+            <li>OpenAI, para geração de conteúdo e áudio com IA.</li>
+          </ul>
+
+          <p>
+            Esses serviços podem processar dados conforme suas próprias políticas
+            de privacidade e termos.
+          </p>
+
+          <h2>6. Google Analytics</h2>
+          <p>
+            Usamos o Google Analytics para entender como os usuários interagem com
+            o Cyrna, identificar problemas, medir desempenho e melhorar o produto.
+            O Google Analytics pode coletar informações como páginas acessadas,
+            eventos de uso, tipo de dispositivo, navegador e dados aproximados de
+            localização.
+          </p>
+
+          <h2>7. Pagamentos</h2>
+          <p>
+            Os pagamentos e assinaturas são processados pela Stripe. O Cyrna não
+            armazena dados completos de cartão de crédito. Informações de pagamento
+            são processadas diretamente pela Stripe.
+          </p>
+
+          <h2>8. Menores de idade</h2>
+          <p>
+            O Cyrna pode ser utilizado por menores de idade. Caso um responsável
+            legal identifique que uma criança ou adolescente forneceu dados sem
+            autorização, poderá entrar em contato conosco para solicitar análise ou
+            exclusão das informações.
+          </p>
+
+          <h2>9. Compartilhamento de dados</h2>
+          <p>
+            Não vendemos seus dados pessoais. Podemos compartilhar informações
+            apenas quando necessário para operar o serviço, cumprir obrigações
+            legais, processar pagamentos, autenticar usuários, executar recursos de
+            IA ou proteger o Cyrna e seus usuários.
+          </p>
+
+          <h2>10. Segurança</h2>
+          <p>
+            Aplicamos medidas técnicas e organizacionais para proteger seus dados.
+            No entanto, nenhum sistema online é totalmente imune a falhas,
+            ataques ou acessos não autorizados.
+          </p>
+
+          <h2>11. Retenção e exclusão de dados</h2>
+          <p>
+            Mantemos seus dados enquanto sua conta estiver ativa ou enquanto forem
+            necessários para fornecer o serviço. Você pode solicitar a exclusão da
+            sua conta e dos seus dados entrando em contato pelo e-mail:
+            contato@cyrna.com.br.
+          </p>
+
+          <h2>12. Acesso e exportação de dados</h2>
+          <p>
+            Você pode solicitar informações sobre os dados associados à sua conta
+            ou uma cópia desses dados entrando em contato pelo e-mail:
+            contato@cyrna.com.br.
+          </p>
+
+          <h2>13. Alterações nesta política</h2>
+          <p>
+            Podemos atualizar esta Política de Privacidade periodicamente. Quando
+            isso acontecer, a data de atualização será modificada nesta página.
+          </p>
+
+          <h2>14. Contato</h2>
+          <p>
+            Em caso de dúvidas sobre esta Política de Privacidade ou sobre o uso
+            dos seus dados, entre em contato:
+          </p>
+
+          <p>
+            <strong>E-mail:</strong> contato@cyrna.com.br
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user && publicPage === "terms") {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          background: dark ? "#121212" : "#f7f7fb",
+          color: dark ? "#fff" : "#111",
+          padding: 20
+        }}
+      >
+        <div
+          style={{
+            maxWidth: 860,
+            margin: "0 auto",
+            background: dark ? "#1e1e1e" : "#ffffff",
+            borderRadius: 24,
+            padding: "28px 24px",
+            boxShadow: dark
+              ? "0 20px 50px rgba(0,0,0,0.35)"
+              : "0 20px 50px rgba(0,0,0,0.08)"
+          }}
+        >
+          <button
+            onClick={() => setPublicPage("home")}
+            style={{
+              border: "none",
+              background: "transparent",
+              color: dark ? "#fff" : "#111",
+              cursor: "pointer",
+              fontWeight: 800,
+              marginBottom: 18
+            }}
+          >
+            ← Voltar
+          </button>
+
+          <h1 style={{ marginTop: 0 }}>Termos de Serviço</h1>
+
+          <p style={{ opacity: 0.75 }}>
+            Última atualização: 14 de junho de 2026
+          </p>
+
+          <p>
+            Estes Termos de Serviço regulam o acesso e uso do Cyrna. Ao criar uma
+            conta ou utilizar o aplicativo, você concorda com os termos descritos
+            nesta página.
+          </p>
+
+          <h2>1. Sobre o Cyrna</h2>
+
+          <p>
+            O Cyrna é uma plataforma de estudos baseada em flashcards, repetição
+            espaçada, inteligência artificial e ferramentas de aprendizado
+            projetadas para auxiliar usuários na retenção de conhecimento.
+          </p>
+
+          <h2>2. Elegibilidade</h2>
+
+          <p>
+            O serviço pode ser utilizado por adultos e menores de idade. Usuários
+            menores devem utilizar a plataforma sob supervisão de seus
+            responsáveis legais quando aplicável.
+          </p>
+
+          <h2>3. Conta do usuário</h2>
+
+          <p>
+            Você é responsável pelas informações fornecidas durante o cadastro e
+            pela segurança de sua conta.
+          </p>
+
+          <p>
+            Você concorda em:
+          </p>
+
+          <ul>
+            <li>Fornecer informações verdadeiras e atualizadas.</li>
+            <li>Manter a confidencialidade de suas credenciais.</li>
+            <li>Não compartilhar sua conta com terceiros.</li>
+            <li>Notificar qualquer uso não autorizado da conta.</li>
+          </ul>
+
+          <h2>4. Conteúdo criado pelo usuário</h2>
+
+          <p>
+            Os usuários podem criar decks, flashcards, notas e outros conteúdos
+            dentro da plataforma.
+          </p>
+
+          <p>
+            Você permanece proprietário do conteúdo que criar, mas concede ao
+            Cyrna autorização para armazenar, processar e exibir esse conteúdo
+            conforme necessário para o funcionamento do serviço.
+          </p>
+
+          <h2>5. Inteligência artificial</h2>
+
+          <p>
+            Alguns recursos utilizam serviços de inteligência artificial para
+            geração de flashcards, conteúdo educacional e áudio.
+          </p>
+
+          <p>
+            Embora busquemos oferecer resultados úteis e precisos, não garantimos
+            que conteúdos gerados por IA estejam livres de erros, imprecisões ou
+            interpretações incorretas.
+          </p>
+
+          <p>
+            O usuário é responsável por revisar o conteúdo gerado antes de utilizá-lo.
+          </p>
+
+          <h2>6. Assinaturas Premium</h2>
+
+          <p>
+            Alguns recursos do Cyrna podem estar disponíveis apenas para usuários
+            Premium.
+          </p>
+
+          <p>
+            As assinaturas são processadas pela Stripe e podem ser cobradas de
+            forma recorrente conforme o plano contratado.
+          </p>
+
+          <p>
+            O cancelamento pode ser realizado através da área de gerenciamento da
+            assinatura disponibilizada pelo serviço.
+          </p>
+
+          <h2>7. Uso aceitável</h2>
+
+          <p>
+            Você concorda em não utilizar o Cyrna para:
+          </p>
+
+          <ul>
+            <li>Atividades ilegais ou fraudulentas.</li>
+            <li>Distribuição de malware ou conteúdo malicioso.</li>
+            <li>Violação de direitos autorais ou propriedade intelectual.</li>
+            <li>Assédio, discriminação ou abuso contra terceiros.</li>
+            <li>Tentativas de acesso não autorizado aos sistemas do Cyrna.</li>
+          </ul>
+
+          <h2>8. Disponibilidade do serviço</h2>
+
+          <p>
+            O Cyrna busca manter seus serviços disponíveis continuamente, mas não
+            garante disponibilidade ininterrupta.
+          </p>
+
+          <p>
+            O serviço poderá sofrer interrupções para manutenção, atualizações ou
+            eventos fora do nosso controle.
+          </p>
+
+          <h2>9. Limitação de responsabilidade</h2>
+
+          <p>
+            O Cyrna é fornecido "como está".
+          </p>
+
+          <p>
+            Não garantimos resultados específicos de aprendizado, desempenho
+            acadêmico ou profissional decorrentes do uso da plataforma.
+          </p>
+
+          <p>
+            Na máxima extensão permitida pela legislação aplicável, o Cyrna não
+            será responsável por perdas indiretas, danos consequenciais ou lucros
+            cessantes decorrentes do uso do serviço.
+          </p>
+
+          <h2>10. Encerramento de contas</h2>
+
+          <p>
+            Podemos suspender ou encerrar contas que violem estes Termos de
+            Serviço ou que representem riscos à segurança da plataforma.
+          </p>
+
+          <p>
+            Usuários também podem solicitar o encerramento de suas contas através
+            do e-mail de suporte.
+          </p>
+
+          <h2>11. Alterações dos termos</h2>
+
+          <p>
+            Podemos atualizar estes Termos de Serviço periodicamente.
+          </p>
+
+          <p>
+            Quando alterações relevantes forem realizadas, a data de atualização
+            será modificada nesta página.
+          </p>
+
+          <h2>12. Lei aplicável</h2>
+
+          <p>
+            Estes Termos de Serviço serão regidos pelas leis da República
+            Federativa do Brasil.
+          </p>
+
+          <h2>13. Contato</h2>
+
+          <p>
+            Em caso de dúvidas sobre estes Termos de Serviço, entre em contato:
+          </p>
+
+          <p>
+            <strong>E-mail:</strong> contato@cyrna.com.br
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   if (!user && !showLogin) {
     return (
       <div
@@ -3455,6 +3854,44 @@ ${noteContent}
               Criar conta grátis
             </button>
           </section>
+          <footer
+            style={{
+              marginTop: 34,
+              paddingBottom: 20,
+              display: "flex",
+              justifyContent: "center",
+              gap: 18,
+              flexWrap: "wrap",
+              fontSize: 13,
+              opacity: 0.75
+            }}
+          >
+            <button
+              onClick={() => setPublicPage("privacy")}
+              style={{
+                border: "none",
+                background: "transparent",
+                color: dark ? "#fff" : "#111",
+                cursor: "pointer",
+                textDecoration: "underline"
+              }}
+            >
+              Política de Privacidade
+            </button>
+
+            <button
+              onClick={() => setPublicPage("terms")}
+              style={{
+                border: "none",
+                background: "transparent",
+                color: dark ? "#fff" : "#111",
+                cursor: "pointer",
+                textDecoration: "underline"
+              }}
+            >
+              Termos de Serviço
+            </button>
+          </footer>
         </main>
       </div>
     );
