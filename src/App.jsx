@@ -2206,6 +2206,11 @@ ${noteContent}
 
     try {
       await createUserWithEmailAndPassword(auth, email, password);
+
+      if (typeof fbq !== "undefined") {
+        fbq("track", "CompleteRegistration");
+      }
+
       showToast("Conta criada com sucesso", "success");
       setEmail("");
       setPassword("");
