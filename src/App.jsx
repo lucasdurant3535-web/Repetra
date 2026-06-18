@@ -3671,87 +3671,19 @@ ${noteContent}
               <div
                 style={{
                   borderRadius: 28,
-                  padding: 22,
+                  padding: 12,
                   background: dark ? "#17172A" : "#ffffff"
                 }}
               >
-                <div style={{ fontSize: 13, opacity: 0.65, marginBottom: 14 }}>
-                  Hoje para revisar
-                </div>
-
-                <div
+                <img
+                  src="/screenshots/study.png"
+                  alt="Tela de estudo do Cyrna"
                   style={{
-                    padding: 18,
+                    width: "100%",
                     borderRadius: 22,
-                    background: dark ? "#202033" : "#f6f6ff",
-                    marginBottom: 12
+                    display: "block"
                   }}
-                >
-                  <strong>🇪🇸 Espanhol</strong>
-                  <p style={{ margin: "8px 0 0", opacity: 0.7 }}>
-                    12 cartas no momento ideal
-                  </p>
-                </div>
-
-                <div
-                  style={{
-                    padding: 22,
-                    borderRadius: 24,
-                    background: "linear-gradient(135deg, #7C5CFF, #5A8BFF)",
-                    color: "#fff",
-                    textAlign: "center",
-                    marginTop: 16
-                  }}
-                >
-                  <div style={{ fontSize: 14, opacity: 0.85 }}>
-                    Flashcard
-                  </div>
-
-                  <h2 style={{ margin: "12px 0", fontSize: 30 }}>
-                    I remember
-                  </h2>
-
-                  <p style={{ margin: 0, opacity: 0.85 }}>
-                    Toque para revelar
-                  </p>
-                </div>
-
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 1fr",
-                    gap: 10,
-                    marginTop: 14
-                  }}
-                >
-                  <div
-                    style={{
-                      padding: 14,
-                      borderRadius: 18,
-                      background: dark
-                        ? "rgba(255,255,255,0.06)"
-                        : "rgba(0,0,0,0.04)"
-                    }}
-                  >
-                    🔥 7 dias
-                    <br />
-                    <span style={{ fontSize: 12, opacity: 0.65 }}>streak</span>
-                  </div>
-
-                  <div
-                    style={{
-                      padding: 14,
-                      borderRadius: 18,
-                      background: dark
-                        ? "rgba(255,255,255,0.06)"
-                        : "rgba(0,0,0,0.04)"
-                    }}
-                  >
-                    🧠 91%
-                    <br />
-                    <span style={{ fontSize: 12, opacity: 0.65 }}>retenção</span>
-                  </div>
-                </div>
+                />
               </div>
             </div>
           </section>
@@ -3825,6 +3757,125 @@ ${noteContent}
 
           <section
             style={{
+              marginTop: 80
+            }}
+          >
+            <div
+              style={{
+                textAlign: "center",
+                maxWidth: 760,
+                margin: "0 auto 34px"
+              }}
+            >
+              <h2
+                style={{
+                  fontSize: "clamp(30px, 5vw, 48px)",
+                  margin: 0,
+                  fontFamily: "Sora, sans-serif",
+                  letterSpacing: -1
+                }}
+              >
+                Tudo o que você precisa para aprender mais rápido
+              </h2>
+
+              <p
+                style={{
+                  marginTop: 14,
+                  fontSize: 17,
+                  lineHeight: 1.7,
+                  opacity: 0.78
+                }}
+              >
+                O Cyrna organiza seu estudo em um ciclo simples: criar, revisar e acompanhar sua evolução.
+              </p>
+            </div>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
+                gap: 22
+              }}
+            >
+              {[
+                {
+                  image: "/screenshots/today.png",
+                  title: "Veja o que revisar hoje",
+                  text: "A aba Hoje mostra os conteúdos que precisam de revisão no momento certo."
+                },
+                {
+                  image: "/screenshots/ai.png",
+                  title: "Crie flashcards com IA",
+                  text: "Transforme temas, anotações e assuntos em cartões de estudo em poucos segundos."
+                },
+                {
+                  image: "/screenshots/stats.png",
+                  title: "Acompanhe sua evolução",
+                  text: "Veja seu progresso, streak, retenção e métricas de memória ao longo do tempo."
+                }
+              ].map((item) => (
+                <div
+                  key={item.title}
+                  style={{
+                    borderRadius: 28,
+                    padding: 14,
+                    background: dark ? "rgba(255,255,255,0.04)" : "#ffffff",
+                    border: dark
+                      ? "1px solid rgba(255,255,255,0.08)"
+                      : "1px solid rgba(0,0,0,0.06)",
+                    boxShadow: dark
+                      ? "0 20px 60px rgba(0,0,0,0.25)"
+                      : "0 18px 55px rgba(0,0,0,0.08)"
+                  }}
+                >
+                  <div
+                    style={{
+                      borderRadius: 22,
+                      overflow: "hidden",
+                      background: dark ? "#17172A" : "#f5f5ff",
+                      marginBottom: 18
+                    }}
+                  >
+                    <img
+                      src={item.image}
+                      alt={item.title}
+                      style={{
+                        width: "100%",
+                        maxHeight: 520,
+                        objectFit: "cover",
+                        display: "block"
+                      }}
+                    />
+                  </div>
+
+                  <div style={{ padding: "0 6px 8px" }}>
+                    <h3
+                      style={{
+                        margin: "0 0 8px",
+                        fontSize: 20,
+                        fontFamily: "Sora, sans-serif"
+                      }}
+                    >
+                      {item.title}
+                    </h3>
+
+                    <p
+                      style={{
+                        margin: 0,
+                        opacity: 0.72,
+                        lineHeight: 1.6
+                      }}
+                    >
+                      {item.text}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section
+            style={{
               marginTop: 70,
               textAlign: "center",
               padding: 34,
@@ -3844,7 +3895,7 @@ ${noteContent}
             </h2>
 
             <p style={{ opacity: 0.88, fontSize: 17, marginTop: 12 }}>
-              Crie seus primeiros flashcards e veja como o Cyrna organiza suas revisões.
+              Crie sua conta gratuitamente e descubra como a repetição espaçada pode transformar seus estudos.
             </p>
 
             <button
