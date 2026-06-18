@@ -1749,6 +1749,14 @@ ${noteContent}
     const checkout = params.get("checkout");
 
     if (checkout === "success") {
+
+      if (typeof fbq !== "undefined") {
+        fbq("track", "Purchase", {
+          value: 19.90,
+          currency: "BRL"
+        });
+      }
+
       setToast({
         message: "Pagamento realizado com sucesso! Agora é só aguardar a ativação do Premium.",
         type: "success"
