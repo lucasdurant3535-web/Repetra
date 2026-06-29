@@ -3589,7 +3589,7 @@ ${noteContent}
                   fontFamily: "Sora, sans-serif"
                 }}
               >
-                Aprenda melhor.
+                O problema não é estudar.
                 <br />
                 <span
                   style={{
@@ -3598,7 +3598,7 @@ ${noteContent}
                     color: "transparent"
                   }}
                 >
-                  Esqueça menos.
+                  É lembrar.
                 </span>
               </h1>
 
@@ -3684,17 +3684,44 @@ ${noteContent}
               <div
                 style={{
                   borderRadius: 28,
-                  padding: 12,
-                  background: dark ? "#17172A" : "#ffffff"
+                  padding: 22,
+                  background: dark ? "#17172A" : "#ffffff",
+                  display: "grid",
+                  gridTemplateColumns: "1fr auto 1fr",
+                  alignItems: "center",
+                  gap: 18
                 }}
               >
                 <img
-                  src="/screenshots/study.png"
-                  alt="Tela de estudo do Cyrna"
+                  src="/screenshots/front-card.png"
+                  alt="Frente da carta"
                   style={{
                     width: "100%",
-                    borderRadius: 22,
-                    display: "block"
+                    borderRadius: 18,
+                    display: "block",
+                    boxShadow: "0 10px 30px rgba(0,0,0,0.25)"
+                  }}
+                />
+
+                <div
+                  style={{
+                    fontSize: 34,
+                    fontWeight: 900,
+                    color: dark ? "#fff" : "#111",
+                    opacity: 0.85
+                  }}
+                >
+                  →
+                </div>
+
+                <img
+                  src="/screenshots/back-card.png"
+                  alt="Verso da carta"
+                  style={{
+                    width: "100%",
+                    borderRadius: 18,
+                    display: "block",
+                    boxShadow: "0 10px 30px rgba(0,0,0,0.25)"
                   }}
                 />
               </div>
@@ -3706,27 +3733,80 @@ ${noteContent}
               style={{
                 fontSize: "clamp(28px, 4vw, 44px)",
                 textAlign: "center",
-                marginBottom: 14,
+                marginBottom: 30,
                 fontFamily: "Sora, sans-serif"
               }}
             >
               Você não esquece porque é ruim.
             </h2>
 
-            <p
+            <div
               style={{
-                maxWidth: 720,
+                maxWidth: 850,
                 margin: "0 auto",
-                textAlign: "center",
-                lineHeight: 1.7,
-                opacity: 0.78,
-                fontSize: 17
+                lineHeight: 1.9,
+                opacity: 0.82,
+                fontSize: 18
               }}
             >
-              Seu cérebro naturalmente esquece informações que não são revisadas.
-              O Cyrna ajuda você a revisar no momento certo, antes que o conteúdo
-              desapareça da memória.
-            </p>
+              <p>
+                Vamos começar por um ponto muito importante: é IMPOSSÍVEL você se lembrar
+                de tudo o que estuda. Nosso cérebro não foi programado para isso.
+              </p>
+
+              <p>
+                Dito isso, você pode SIM indicar ao seu cérebro o que deseja armazenar na
+                memória de médio e longo prazo. Olha só que massa.
+              </p>
+
+              <p>
+                A maioria de nós acredita que, para estudar e aprender algum assunto,
+                precisamos sentar na cadeira e ficar na frente de um livro ou computador
+                por HORAS. Mas eu te garanto que você não precisa fazer isso.
+              </p>
+
+              <p>
+                O que realmente importa não é a quantidade de horas estudadas, mas sim a
+                qualidade e a frequência do estudo. Uma hora de estudo com revisões
+                inteligentes por dia vale muito mais do que oito horas de estudo
+                aleatório e sem estratégia.
+              </p>
+
+              <p>
+                E o que o Cyrna pode fazer por você?
+              </p>
+
+              <p>
+                A resposta é simples, mas poderosa...
+              </p>
+
+              <p>
+                O Cyrna pode (e vai) te ajudar a lembrar do que você não quer esquecer.
+              </p>
+
+              <p>
+                Eu falei que era simples.
+              </p>
+
+              <p>
+                Agora é o seguinte: seja você estudante de idiomas, concurseiro,
+                universitário ou apenas alguém que gosta de aprender coisas novas, venha
+                descobrir a beleza de estudar algo e depois conseguir se lembrar disso de
+                forma natural.
+              </p>
+
+              <p
+                style={{
+                  textAlign: "center",
+                  fontWeight: 800,
+                  fontSize: 24,
+                  marginTop: 40,
+                  fontFamily: "Sora, sans-serif"
+                }}
+              >
+                Aprenda mais. Esqueça menos.
+              </p>
+            </div>
           </section>
 
           <section
